@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>サブスク管理</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #18181f;
+  --surface3: #22222c;
+  --surface4: #2a2a36;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text: #eeeef5;
+  --text2: #8888a8;
+  --text3: #4a4a68;
+  --accent: #6c63ff;
+  --accent2: #5a52d5;
+  --accent-soft: rgba(108,99,255,0.15);
+  --green: #2dd4a0;
+  --green-soft: rgba(45,212,160,0.12);
+  --red: #ff5f7e;
+  --red-soft: rgba(255,95,126,0.12);
+  --amber: #ffb547;
+  --amber-soft: rgba(255,181,71,0.12);
+  --font: 'Outfit', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --sidebar-w: 280px;
+  --nav-h: 68px;
+}
+
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); overflow: hidden; }
+
+/* ── Setup Screen ── */
+#setup-screen {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 24px;
+}
+.setup-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 24px; padding: 40px 36px; width: 100%; max-width: 480px;
+}
+.setup-logo { font-size: 48px; text-align: center; margin-bottom: 20px; }
+.setup-title { font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 8px; letter-spacing: -0.5px; }
+.setup-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 32px; line-height: 1.6; }
+.setup-group { margin-bottom: 20px; }
+.setup-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: block; }
+.setup-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 12px; color: var(--text); font-family: var(--mono);
+  font-size: 13px; padding: 12px 16px; outline: none; transition: border-color 0.15s;
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-hint { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+.setup-btn {
+  width: 100%; background: var(--accent); border: none; border-radius: 14px;
+  color: #fff; font-family: var(--font); font-size: 16px; font-weight: 600;
+  padding: 15px; cursor: pointer; transition: background 0.15s; margin-top: 8px;
+}
+.setup-btn:hover { background: var(--accent2); }
+.setup-error { background: var(--red-soft); border: 1px solid rgba(255,95,126,0.3); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--red); margin-top: 12px; display: none; }
+
+/* ── App Layout ── */
+#app { display: none; height: 100dvh; }
+
+/* Desktop: sidebar layout */
+@media (min-width: 768px) {
+  #app { display: none; }
+  #app.ready { display: grid; grid-template-columns: var(--sidebar-w) 1fr; grid-template-rows: 1fr; }
+  .sidebar { display: flex; }
+  .bottom-nav { display: none; }
+  .mobile-header { display: none; }
+  .main-area { display: flex; flex-direction: column; overflow: hidden; }
+  .desktop-content { flex: 1; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+}
+
+/* Mobile: bottom nav layout */
+@media (max-width: 767px) {
+  #app.ready { display: flex; flex-direction: column; }
+  .sidebar { display: none; }
+  .bottom-nav { display: flex; }
+  .mobile-header { display: flex; }
+  .main-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .desktop-content { flex: 1; overflow: hidden; position: relative; }
+  .page { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; }
+  .page.active { display: block; }
+}
+
+/* ── Sidebar (Desktop) ── */
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  flex-direction: column; overflow: hidden;
+  grid-row: 1; grid-column: 1;
+}
+.sb-head { padding: 28px 20px 20px; border-bottom: 1px solid var(--border); }
+.sb-logo { font-size: 28px; margin-bottom: 8px; }
+.sb-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.sb-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.sb-nav { padding: 12px; flex: 1; overflow-y: auto; }
+.sb-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 12px; cursor: pointer;
+  font-size: 14px; font-weight: 500; color: var(--text2);
+  transition: all 0.12s; margin-bottom: 2px; border: none;
+  background: transparent; width: 100%; font-family: var(--font);
+}
+.sb-nav-item:hover { background: var(--surface2); color: var(--text); }
+.sb-nav-item.active { background: var(--accent-soft); color: var(--accent); }
+.sb-nav-icon { font-size: 18px; width: 24px; text-align: center; }
+.sb-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.sb-add-btn {
+  width: 100%; background: var(--accent); border: none; border-radius: 12px;
+  color: #fff; font-family: var(--font); font-size: 14px; font-weight: 600;
+  padding: 12px; cursor: pointer; transition: background 0.15s; margin-bottom: 12px;
+}
+.sb-add-btn:hover { background: var(--accent2); }
+.sb-month-summary { background: var(--surface2); border-radius: 12px; padding: 14px; }
+.sb-summary-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.sb-summary-val { font-family: var(--mono); font-size: 20px; font-weight: 500; margin-bottom: 10px; }
+.sb-progress { height: 3px; background: var(--surface3); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+.sb-progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.4s; }
+.sb-progress-text { font-size: 11px; color: var(--text2); }
+.sb-logout-btn {
+  width: 100%; background: transparent; border: 1px solid var(--border2);
+  border-radius: 10px; color: var(--text2); font-family: var(--font);
+  font-size: 12px; padding: 8px; cursor: pointer; margin-top: 10px; transition: all 0.12s;
+}
+.sb-logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ── Mobile Header ── */
+.mobile-header {
+  align-items: center; justify-content: space-between;
+  padding: 14px 20px; padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.mobile-header-title { font-size: 18px; font-weight: 700; }
+.mobile-header-actions { display: flex; gap: 8px; }
+
+/* ── Mobile Bottom Nav ── */
+.bottom-nav {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px); flex-shrink: 0;
+}
+.nav-items { display: flex; }
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; padding: 10px 0 12px;
+  cursor: pointer; border: none; background: transparent;
+  color: var(--text3); font-family: var(--font); transition: color 0.12s;
+}
+.nav-item.active { color: var(--accent); }
+.nav-icon { font-size: 20px; }
+.nav-label { font-size: 10px; font-weight: 500; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--font); font-size: 14px; font-weight: 500;
+  padding: 10px 18px; border-radius: 12px; border: 1px solid var(--border2);
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-ghost { background: transparent; color: var(--text); }
+.btn-ghost:hover { background: var(--surface3); }
+.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: var(--red-soft); }
+.btn-sm { font-size: 12px; padding: 7px 13px; border-radius: 9px; }
+.btn-icon { width: 38px; height: 38px; padding: 0; border-radius: 10px; font-size: 17px; }
+
+/* ── Page common ── */
+.page-inner { padding: 24px; max-width: 1100px; margin: 0 auto; }
+@media (max-width: 767px) { .page-inner { padding: 16px; } }
+
+/* ── Calendar Page ── */
+.cal-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; gap: 12px;
+}
+.cal-nav { display: flex; align-items: center; gap: 10px; }
+.cal-nav-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--border2); background: var(--surface);
+  color: var(--text); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s;
+}
+.cal-nav-btn:hover { background: var(--surface3); }
+.cal-month { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; min-width: 150px; }
+
+.cal-summary-strip {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;
+}
+@media (min-width: 768px) { .cal-summary-strip { grid-template-columns: repeat(3, 1fr); max-width: 480px; } }
+
+.sum-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 14px 16px;
+}
+.sum-label { font-size: 10px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+.sum-val { font-family: var(--mono); font-size: 16px; font-weight: 500; }
+.sum-val.green { color: var(--green); }
+.sum-val.red { color: var(--red); }
+
+.cal-dow {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 5px;
+}
+.cal-dow span { text-align: center; font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+
+.cal-cell {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 8px 6px;
+  transition: border-color 0.12s; overflow: hidden;
+  min-height: 90px;
+}
+@media (min-width: 768px) { .cal-cell { min-height: 110px; } }
+.cal-cell.other { background: transparent; border-color: transparent; }
+.cal-cell.other .cal-day-n { color: var(--text3); }
+.cal-cell.today { border-color: var(--accent); }
+.cal-day-n { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 5px; text-align: center; }
+.today .cal-day-n { color: var(--accent); }
+.cal-chips { display: flex; flex-direction: column; gap: 2px; }
+.cal-chip {
+  display: flex; align-items: center; gap: 3px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 5px; cursor: pointer;
+  transition: all 0.12s; overflow: hidden;
+}
+.cal-chip:hover { border-color: var(--accent); }
+.cal-chip.paid { opacity: 0.38; }
+.cal-chip.overdue { border-color: rgba(255,95,126,0.4); background: var(--red-soft); }
+.chip-logo {
+  width: 15px; height: 15px; border-radius: 3px;
+  background: var(--surface3); display: flex; align-items: center;
+  justify-content: center; font-size: 9px; overflow: hidden; flex-shrink: 0;
+}
+.chip-logo img { width: 100%; height: 100%; object-fit: cover; }
+.chip-amt { font-family: var(--mono); font-size: 9px; font-weight: 500; white-space: nowrap; overflow: hidden; flex: 1; }
+.chip-amt.overdue { color: var(--red); }
+.chip-check { width: 10px; height: 10px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; font-size: 6px; color: #fff; flex-shrink: 0; }
+
+/* ── List Page ── */
+.list-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.list-header span { font-size: 13px; color: var(--text2); }
+.range-select {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px;
+  color: var(--text); font-family: var(--font); font-size: 13px;
+  padding: 8px 12px; outline: none; cursor: pointer; height: 40px;
+}
+.list-month-block { margin-bottom: 28px; }
+.list-month-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.list-month-head h3 { font-size: 16px; font-weight: 700; }
+.list-month-sub { font-size: 12px; color: var(--text2); }
+.list-month-total { font-family: var(--mono); font-size: 14px; font-weight: 500; margin-left: auto; }
+.list-table { width: 100%; border-collapse: collapse; }
+.list-table th {
+  font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase;
+  letter-spacing: 0.4px; text-align: left; padding: 8px 14px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.list-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+.list-table tr:last-child td { border-bottom: none; }
+.list-table tr:hover td { background: var(--surface2); cursor: pointer; }
+.list-logo-cell { display: flex; align-items: center; gap: 10px; }
+.list-logo {
+  width: 32px; height: 32px; border-radius: 9px; background: var(--surface3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border);
+}
+.list-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+.list-item-name { font-size: 14px; font-weight: 500; }
+.list-item-meta { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.badge { display: inline-block; font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
+.badge-paid { background: var(--green-soft); color: var(--green); }
+.badge-unpaid { background: rgba(255,255,255,0.06); color: var(--text2); }
+.badge-overdue { background: var(--red-soft); color: var(--red); }
+.paid-toggle-btn {
+  font-size: 11px; padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border2);
+  background: transparent; color: var(--text2); cursor: pointer; transition: all 0.12s; font-family: var(--font);
+}
+.paid-toggle-btn:hover { border-color: var(--green); color: var(--green); }
+.paid-toggle-btn.is-paid { border-color: var(--green); color: var(--green); }
+
+/* Mobile list fallback */
+@media (max-width: 600px) {
+  .list-table thead { display: none; }
+  .list-table tr { display: flex; flex-wrap: wrap; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 6px; }
+  .list-table tr:last-child { border-bottom: none; }
+  .list-table td { border: none; padding: 0 14px; }
+  .list-table td:nth-child(3) { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+}
+
+/* ── Subs Page ── */
+.subs-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.subs-page-title { font-size: 22px; font-weight: 700; }
+.subs-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.sub-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 16px; display: flex; align-items: center; gap: 14px;
+  cursor: pointer; transition: all 0.12s;
+}
+.sub-card:hover { border-color: var(--border2); background: var(--surface2); }
+.sub-card-logo {
+  width: 46px; height: 46px; border-radius: 12px; background: var(--surface3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border);
+}
+.sub-card-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 11px; }
+.sub-card-info { flex: 1; min-width: 0; }
+.sub-card-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub-card-meta { font-size: 11px; color: var(--text2); margin-top: 3px; }
+.sub-card-amt { font-family: var(--mono); font-size: 15px; font-weight: 500; flex-shrink: 0; }
+
+/* ── Settings Page ── */
+.settings-section { margin-bottom: 28px; }
+.settings-section-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; padding-left: 4px; }
+.settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.settings-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 15px 18px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.12s;
+}
+.settings-item:last-child { border-bottom: none; }
+.settings-item:hover { background: var(--surface2); }
+.settings-item-label { font-size: 14px; font-weight: 500; }
+.settings-item-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.settings-arrow { color: var(--text3); }
+.method-tags-wrap { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 18px; }
+.method-tag {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 6px 12px; font-size: 13px; font-weight: 500;
+}
+.method-tag-del {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--surface3);
+  border: none; color: var(--text2); font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.12s;
+}
+.method-tag-del:hover { background: var(--red-soft); color: var(--red); }
+.method-add-row { display: flex; gap: 8px; padding: 0 18px 16px; }
+.method-add-input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px;
+  color: var(--text); font-family: var(--font); font-size: 13px; padding: 9px 13px; outline: none;
+}
+.method-add-input:focus { border-color: var(--accent); }
+
+/* ── Modal / Sheet ── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  z-index: 300; align-items: flex-end; justify-content: center;
+}
+.overlay.open { display: flex; }
+@media (min-width: 768px) {
+  .overlay { align-items: center; }
+  .sheet { border-radius: 20px; max-width: 520px; margin: 20px; max-height: 90vh; }
+  .sheet-handle { display: none; }
+}
+.sheet {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 24px 24px 0 0; width: 100%; max-height: 92dvh;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  animation: slideUp 0.22s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.sheet-handle { width: 36px; height: 4px; background: var(--surface4); border-radius: 2px; margin: 12px auto 0; }
+.sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px 12px; }
+.sheet-title { font-size: 18px; font-weight: 700; }
+.sheet-close {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border2);
+  background: transparent; color: var(--text2); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.12s;
+}
+.sheet-close:hover { background: var(--surface3); color: var(--text); }
+.sheet-body { padding: 0 22px; }
+
+/* ── Form ── */
+.form-group { margin-bottom: 18px; }
+.form-label { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 7px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 12px; color: var(--text); font-family: var(--font);
+  font-size: 15px; padding: 12px 15px; outline: none; transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+select.form-input { appearance: none; cursor: pointer; }
+.logo-upload {
+  border: 1.5px dashed var(--border2); border-radius: 14px; padding: 20px;
+  text-align: center; cursor: pointer; transition: all 0.15s; position: relative;
+}
+.logo-upload:hover { border-color: var(--accent); background: var(--accent-soft); }
+.logo-prev {
+  width: 58px; height: 58px; border-radius: 14px; background: var(--surface3);
+  margin: 0 auto 10px; overflow: hidden; display: flex; align-items: center;
+  justify-content: center; font-size: 28px; border: 1px solid var(--border);
+}
+.logo-prev img { width: 100%; height: 100%; object-fit: cover; }
+.logo-upload p { font-size: 13px; color: var(--text2); }
+.logo-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+.method-option-list { background: var(--surface2); border: 1px solid var(--border2); border-radius: 12px; overflow: hidden; max-height: 220px; overflow-y: auto; }
+.method-option { display: flex; align-items: center; justify-content: space-between; padding: 13px 15px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px; transition: background 0.12s; }
+.method-option:last-child { border-bottom: none; }
+.method-option:hover { background: var(--surface3); }
+.method-option.selected { color: var(--accent); font-weight: 500; }
+.method-add-inline { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.method-add-input-inline { flex: 1; background: transparent; border: none; color: var(--text); font-family: var(--font); font-size: 14px; outline: none; }
+.method-add-input-inline::placeholder { color: var(--text3); }
+.method-add-btn-inline { background: var(--accent); border: none; color: #fff; border-radius: 8px; padding: 6px 12px; font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; }
+
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+.toggle-label { font-size: 14px; font-weight: 500; }
+.toggle { width: 48px; height: 27px; background: var(--surface3); border-radius: 14px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; }
+.toggle.on { background: var(--accent); }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.toggle.on::after { transform: translateX(21px); }
+
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; padding-bottom: 4px; }
+@media (max-width: 767px) { .modal-actions { flex-direction: column; } .modal-actions .btn { width: 100%; justify-content: center; } }
+
+/* Override sheet */
+.override-info { background: var(--amber-soft); border: 1px solid rgba(255,181,71,0.25); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--amber); margin-bottom: 14px; display: none; }
+.override-info.visible { display: block; }
+
+/* Confirm */
+.confirm-body { text-align: center; padding: 24px 22px; }
+.confirm-icon { font-size: 44px; margin-bottom: 14px; }
+.confirm-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+.confirm-msg { font-size: 14px; color: var(--text2); margin-bottom: 24px; line-height: 1.6; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-actions .btn { flex: 1; justify-content: center; }
+
+/* Loading */
+.loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 500; flex-direction: column; gap: 16px; }
+.loading-spinner { width: 40px; height: 40px; border: 3px solid var(--surface3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 14px; color: var(--text2); }
+
+/* Empty */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+.empty-msg { font-size: 14px; line-height: 1.6; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  background: var(--surface3); border: 1px solid var(--border2); border-radius: 12px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500; z-index: 400;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s; white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+@media (min-width: 768px) { .toast { bottom: 24px; } }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: var(--surface4); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Setup Screen -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-logo">📅</div>
+    <div class="setup-title">サブスク管理</div>
+    <div class="setup-sub">初回のみ設定が必要です。<br>SupabaseのURLとAPIキーを入力してください。</div>
+    <div class="setup-group">
+      <label class="setup-label">Supabase Project URL</label>
+      <input class="setup-input" id="setup-url" placeholder="https://xxxxxxxxxx.supabase.co" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="setup-group">
+      <label class="setup-label">Supabase Anon Key</label>
+      <input class="setup-input" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="setup-hint">Settings → API → Project API Keys の「anon public」キーです</div>
+    </div>
+    <button class="setup-btn" onclick="initSupabase()">接続して始める</button>
+    <div class="setup-error" id="setup-error"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading" style="display:none;">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">読み込み中...</div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <!-- Sidebar (Desktop) -->
+  <aside class="sidebar">
+    <div class="sb-head">
+      <div class="sb-logo">📅</div>
+      <div class="sb-title">サブスク管理</div>
+      <div class="sb-sub">月額支払いをまとめて管理</div>
+    </div>
+    <nav class="sb-nav">
+      <button class="sb-nav-item active" id="sb-cal" onclick="switchPage('cal')">
+        <span class="sb-nav-icon">📅</span> カレンダー
+      </button>
+      <button class="sb-nav-item" id="sb-list" onclick="switchPage('list')">
+        <span class="sb-nav-icon">📋</span> 月別一覧
+      </button>
+      <button class="sb-nav-item" id="sb-subs" onclick="switchPage('subs')">
+        <span class="sb-nav-icon">💳</span> サブスク一覧
+      </button>
+      <button class="sb-nav-item" id="sb-settings" onclick="switchPage('settings')">
+        <span class="sb-nav-icon">⚙️</span> 設定
+      </button>
+    </nav>
+    <div class="sb-footer">
+      <button class="sb-add-btn" onclick="openAddSheet()">＋ サブスクを追加</button>
+      <div class="sb-month-summary">
+        <div class="sb-summary-label" id="sb-month-lbl">今月の合計</div>
+        <div class="sb-summary-val" id="sb-total">¥0</div>
+        <div class="sb-progress"><div class="sb-progress-fill" id="sb-progress" style="width:0%"></div></div>
+        <div class="sb-progress-text" id="sb-progress-text">0/0件 支払済</div>
+      </div>
+      <button class="sb-logout-btn" onclick="logout()">設定をリセット</button>
+    </div>
+  </aside>
+
+  <!-- Main Area -->
+  <div class="main-area">
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <div class="mobile-header-title" id="page-title">カレンダー</div>
+      <div class="mobile-header-actions">
+        <button class="btn btn-icon btn-ghost" onclick="openAddSheet()">＋</button>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="desktop-content">
+      <!-- Calendar -->
+      <div class="page active" id="page-cal">
+        <div class="page-inner">
+          <div class="cal-top">
+            <div class="cal-nav">
+              <button class="cal-nav-btn" onclick="changeMonth(-1)">←</button>
+              <div class="cal-month" id="cal-label">2025年1月</div>
+              <button class="cal-nav-btn" onclick="changeMonth(1)">→</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="goToday()">今月</button>
+          </div>
+          <div class="cal-summary-strip">
+            <div class="sum-card"><div class="sum-label">合計</div><div class="sum-val" id="sum-total">¥0</div></div>
+            <div class="sum-card"><div class="sum-label">支払済</div><div class="sum-val green" id="sum-paid">0件</div></div>
+            <div class="sum-card"><div class="sum-label">未払い</div><div class="sum-val red" id="sum-unpaid">0件</div></div>
+          </div>
+          <div class="cal-dow">
+            <span style="color:#ff5f7e">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color:#6c63ff">土</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div class="page" id="page-list">
+        <div class="page-inner">
+          <div class="list-header">
+            <span>表示期間：</span>
+            <select class="range-select" id="range-start" onchange="renderList()"></select>
+            <span>〜</span>
+            <select class="range-select" id="range-end" onchange="renderList()"></select>
+          </div>
+          <div id="list-content"></div>
+        </div>
+      </div>
+
+      <!-- Subs -->
+      <div class="page" id="page-subs">
+        <div class="page-inner">
+          <div class="subs-page-header">
+            <div class="subs-page-title">サブスク一覧</div>
+            <button class="btn btn-primary btn-sm" onclick="openAddSheet()">＋ 追加</button>
+          </div>
+          <div class="subs-grid" id="subs-grid"></div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="page" id="page-settings">
+        <div class="page-inner">
+          <div class="settings-section">
+            <div class="settings-section-title">支払方法マスタ</div>
+            <div class="settings-card">
+              <div class="method-tags-wrap" id="method-tags"></div>
+              <div class="method-add-row">
+                <input class="method-add-input" id="new-method-input" placeholder="新しい支払方法を追加">
+                <button class="btn btn-primary btn-sm" onclick="addMethod()">追加</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">データ管理</div>
+            <div class="settings-card">
+              <div class="settings-item" onclick="exportCSV()">
+                <div><div class="settings-item-label">📤 CSVエクスポート</div><div class="settings-item-sub">全サブスクデータを書き出す</div></div>
+                <span class="settings-arrow">›</span>
+              </div>
+              <label class="settings-item" style="cursor:pointer;">
+                <div><div class="settings-item-label">📥 CSVインポート</div><div class="settings-item-sub">CSVファイルを読み込む</div></div>
+                <input type="file" accept=".csv" style="display:none" onchange="importCSV(event)">
+                <span class="settings-arrow">›</span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">接続情報</div>
+            <div class="settings-card">
+              <div class="settings-item" onclick="logout()">
+                <div><div class="settings-item-label">🔌 Supabase設定をリセット</div><div class="settings-item-sub">別のプロジェクトに接続し直す</div></div>
+                <span class="settings-arrow">›</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Bottom Nav -->
+    <nav class="bottom-nav">
+      <div class="nav-items">
+        <button class="nav-item active" id="nav-cal" onclick="switchPage('cal')">
+          <span class="nav-icon">📅</span><span class="nav-label">カレンダー</span>
+        </button>
+        <button class="nav-item" id="nav-list" onclick="switchPage('list')">
+          <span class="nav-icon">📋</span><span class="nav-label">月別一覧</span>
+        </button>
+        <button class="nav-item" id="nav-subs" onclick="switchPage('subs')">
+          <span class="nav-icon">💳</span><span class="nav-label">サブスク</span>
+        </button>
+        <button class="nav-item" id="nav-settings" onclick="switchPage('settings')">
+          <span class="nav-icon">⚙️</span><span class="nav-label">設定</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+</div>
+
+<!-- Detail Sheet -->
+<div class="overlay" id="detail-overlay" onclick="overlayClick(event,'detail-overlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">詳細</div>
+      <button class="sheet-close" onclick="closeSheet('detail-overlay')">×</button>
+    </div>
+    <div class="sheet-body" id="detail-body"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Sheet -->
+<div class="overlay" id="edit-overlay" onclick="overlayClick(event,'edit-overlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="edit-title">サブスクを追加</div>
+      <button class="sheet-close" onclick="closeSheet('edit-overlay')">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">ロゴ画像（任意）</label>
+        <div class="logo-upload" onclick="document.getElementById('logo-file').click()">
+          <div class="logo-prev" id="logo-prev">📦</div>
+          <p>クリック／タップして画像を選択</p>
+          <input type="file" id="logo-file" accept="image/*" onchange="previewLogo(event)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">サービス名 *</label>
+          <input class="form-input" id="f-name" placeholder="Netflix">
+        </div>
+        <div class="form-group">
+          <label class="form-label">金額（円）*</label>
+          <input class="form-input" id="f-amount" type="number" inputmode="numeric" placeholder="1490">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">毎月の支払日 * （土日は自動で翌平日に）</label>
+        <input class="form-input" id="f-day" type="number" inputmode="numeric" min="1" max="31" placeholder="1〜31">
+      </div>
+      <div class="form-group">
+        <label class="form-label">支払方法</label>
+        <div class="method-option-list" id="edit-method-list"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">メモ</label>
+        <input class="form-input" id="f-memo" placeholder="ファミリープランなど">
+      </div>
+      <div class="form-group">
+        <div class="toggle-row">
+          <span class="toggle-label">今月分を支払済にする</span>
+          <button class="toggle" id="f-paid-toggle" onclick="this.classList.toggle('on')"></button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeSheet('edit-overlay')">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveSub()">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Override Sheet -->
+<div class="overlay" id="override-overlay" onclick="overlayClick(event,'override-overlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">支払日を上書き</div>
+      <button class="sheet-close" onclick="closeSheet('override-overlay')">×</button>
+    </div>
+    <div class="sheet-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;" id="override-desc"></p>
+      <div class="override-info" id="override-info"></div>
+      <div class="form-group">
+        <label class="form-label">この月だけの支払日</label>
+        <input class="form-input" id="override-day-input" type="number" inputmode="numeric" min="1" max="31" placeholder="1〜31">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="override-clear-btn" onclick="clearOverride()" style="display:none;">上書きを解除</button>
+        <button class="btn btn-primary" onclick="saveOverride()">上書きする</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Sheet -->
+<div class="overlay" id="confirm-overlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="confirm-body">
+      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <div class="confirm-title" id="confirm-title">確認</div>
+      <div class="confirm-msg" id="confirm-msg"></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="closeSheet('confirm-overlay')">キャンセル</button>
+        <button class="btn btn-danger" id="confirm-ok">削除する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Supabase ──
+let supabase = null;
+let subs = [];
+let methods = ['クレジットカード','デビットカード','銀行引き落とし','電子マネー','その他'];
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth();
+let currentPage = 'cal';
+let editingId = null;
+let pendingLogo = null;
+let selectedMethod = '';
+let detailSubId = null;
+let detailMonthKey = null;
+let overrideSubId = null;
+let overrideMonthKey = null;
+
+// ── Helpers ──
+const fmt = n => '¥' + Number(n).toLocaleString();
+const mkKey = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`;
+const curKey = () => mkKey(currentYear, currentMonth);
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showLoading(msg = '読み込み中...') {
+  document.getElementById('loading-text').textContent = msg;
+  document.getElementById('loading').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+function isPaid(sub, key) { return !!(sub.paid_months && sub.paid_months[key || curKey()]); }
+
+function adjustForWeekend(y, m, day) {
+  const maxDay = new Date(y, m + 1, 0).getDate();
+  let d = Math.min(day, maxDay);
+  const dow = new Date(y, m, d).getDay();
+  if (dow === 6) d += 2;
+  if (dow === 0) d += 1;
+  return Math.min(d, new Date(y, m + 1, 0).getDate());
+}
+
+function getEffectiveDay(sub, y, m) {
+  const key = mkKey(y, m);
+  if (sub.override_days && sub.override_days[key] != null) return sub.override_days[key];
+  return adjustForWeekend(y, m, sub.day);
+}
+
+function isOverdue(sub, key) {
+  const [ky, km] = key.split('-').map(Number);
+  const effDay = getEffectiveDay(sub, ky, km - 1);
+  const today = new Date();
+  const payDate = new Date(ky, km - 1, effDay);
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return !isPaid(sub, key) && payDate < todayMid;
+}
+
+function nextSeqId() {
+  if (subs.length === 0) return '001';
+  const nums = subs.map(s => parseInt(s.seq_id || '0')).filter(n => !isNaN(n));
+  return String((nums.length > 0 ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+}
+
+// ── Supabase Init ──
+async function initSupabase() {
+  const url = document.getElementById('setup-url').value.trim();
+  const key = document.getElementById('setup-key').value.trim();
+  const errEl = document.getElementById('setup-error');
+  errEl.style.display = 'none';
+  if (!url || !key) { errEl.textContent = 'URLとAPIキーを両方入力してください'; errEl.style.display = 'block'; return; }
+
+  try {
+    supabase = window.supabase.createClient(url, key);
+    // テスト接続
+    const { error } = await supabase.from('subscriptions').select('id').limit(1);
+    if (error) throw error;
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    document.getElementById('setup-screen').style.display = 'none';
+    await startApp();
+  } catch(e) {
+    errEl.textContent = '接続に失敗しました。URLとAPIキーを確認してください。(' + (e.message || e) + ')';
+    errEl.style.display = 'block';
+  }
+}
+
+async function startApp() {
+  showLoading('データを読み込み中...');
+  await loadMethods();
+  await loadSubs();
+  hideLoading();
+  document.getElementById('app').classList.add('ready');
+  buildRangeOptions();
+  render();
+}
+
+function logout() {
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  location.reload();
+}
+
+// ── Data: Subs ──
+async function loadSubs() {
+  const { data, error } = await supabase.from('subscriptions').select('*').order('day', { ascending: true });
+  if (error) { showToast('データの読み込みに失敗しました'); return; }
+  subs = data || [];
+}
+
+async function upsertSub(sub) {
+  const { error } = await supabase.from('subscriptions').upsert(sub);
+  if (error) { showToast('保存に失敗しました: ' + error.message); return false; }
+  return true;
+}
+
+async function deleteSub(id) {
+  const { error } = await supabase.from('subscriptions').delete().eq('id', id);
+  if (error) { showToast('削除に失敗しました'); return; }
+  subs = subs.filter(s => s.id !== id);
+  render();
+}
+
+// ── Data: Methods ──
+async function loadMethods() {
+  const { data } = await supabase.from('settings').select('value').eq('key', 'methods').single();
+  if (data && data.value) methods = data.value;
+}
+
+async function saveMethods() {
+  await supabase.from('settings').upsert({ key: 'methods', value: methods });
+}
+
+// ── Page Switching ──
+function switchPage(p) {
+  currentPage = p;
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .sb-nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  const navEl = document.getElementById('nav-' + p);
+  const sbEl = document.getElementById('sb-' + p);
+  if (navEl) navEl.classList.add('active');
+  if (sbEl) sbEl.classList.add('active');
+  const titles = { cal: 'カレンダー', list: '月別一覧', subs: 'サブスク', settings: '設定' };
+  document.getElementById('page-title').textContent = titles[p];
+  if (p === 'list') { buildRangeOptions(); renderList(); }
+  if (p === 'subs') renderSubsList();
+  if (p === 'settings') renderSettings();
+}
+
+// ── Calendar ──
+function renderCalendar() {
+  document.getElementById('cal-label').textContent = `${currentYear}年${currentMonth + 1}月`;
+  const today = new Date();
+  const key = curKey();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const dim = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const prevDim = new Date(currentYear, currentMonth, 0).getDate();
+
+  const total = subs.reduce((s, sub) => s + (+sub.amount || 0), 0);
+  const paidCnt = subs.filter(s => isPaid(s, key)).length;
+  document.getElementById('sum-total').textContent = fmt(total);
+  document.getElementById('sum-paid').textContent = paidCnt + '件';
+  document.getElementById('sum-unpaid').textContent = (subs.length - paidCnt) + '件';
+  document.getElementById('sb-total').textContent = fmt(total);
+  const paidAmt = subs.filter(s => isPaid(s, key)).reduce((a, s) => a + (+s.amount || 0), 0);
+  const pct = total > 0 ? Math.round(paidAmt / total * 100) : 0;
+  document.getElementById('sb-progress').style.width = pct + '%';
+  document.getElementById('sb-progress-text').textContent = `${paidCnt}/${subs.length}件 支払済`;
+  document.getElementById('sb-month-lbl').textContent = `${currentMonth + 1}月の合計`;
+
+  const byDay = {};
+  subs.forEach(sub => {
+    const d = getEffectiveDay(sub, currentYear, currentMonth);
+    if (!byDay[d]) byDay[d] = [];
+    byDay[d].push(sub);
+  });
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < firstDay; i++) {
+    const c = document.createElement('div'); c.className = 'cal-cell other';
+    c.innerHTML = `<div class="cal-day-n">${prevDim - firstDay + i + 1}</div>`; grid.appendChild(c);
+  }
+  for (let d = 1; d <= dim; d++) {
+    const isToday = today.getFullYear() === currentYear && today.getMonth() === currentMonth && today.getDate() === d;
+    const c = document.createElement('div'); c.className = 'cal-cell' + (isToday ? ' today' : '');
+    let html = `<div class="cal-day-n">${d}</div><div class="cal-chips">`;
+    const items = byDay[d] || [];
+    items.slice(0, 3).forEach(sub => {
+      const paid = isPaid(sub, key); const od = isOverdue(sub, key);
+      html += `<div class="cal-chip ${paid ? 'paid' : od ? 'overdue' : ''}" onclick="openDetail('${sub.id}','${key}')">
+        <div class="chip-logo">${sub.logo ? `<img src="${sub.logo}" alt="">` : sub.emoji || '📦'}</div>
+        <div class="chip-amt ${od && !paid ? 'overdue' : ''}">${fmt(sub.amount)}</div>
+        ${paid ? '<div class="chip-check">✓</div>' : ''}
+      </div>`;
+    });
+    if (items.length > 3) html += `<div style="font-size:9px;color:var(--text3);text-align:center;">+${items.length - 3}</div>`;
+    html += '</div>'; c.innerHTML = html; grid.appendChild(c);
+  }
+  const rem = (firstDay + dim) % 7;
+  if (rem > 0) for (let i = 1; i <= 7 - rem; i++) {
+    const c = document.createElement('div'); c.className = 'cal-cell other';
+    c.innerHTML = `<div class="cal-day-n">${i}</div>`; grid.appendChild(c);
+  }
+}
+
+function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  render();
+}
+function goToday() { const t = new Date(); currentYear = t.getFullYear(); currentMonth = t.getMonth(); render(); }
+
+// ── List ──
+function buildRangeOptions() {
+  const sy = document.getElementById('range-start');
+  const ey = document.getElementById('range-end');
+  if (!sy || !ey) return;
+  const now = new Date(); const opts = [];
+  for (let i = -6; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    opts.push({ y: d.getFullYear(), m: d.getMonth(), key: mkKey(d.getFullYear(), d.getMonth()), label: `${d.getFullYear()}年${d.getMonth() + 1}月` });
+  }
+  sy.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+  ey.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+  const ci = opts.findIndex(o => o.y === now.getFullYear() && o.m === now.getMonth());
+  sy.value = opts[Math.max(0, ci - 2)].key;
+  ey.value = opts[Math.min(opts.length - 1, ci + 1)].key;
+}
+
+function renderList() {
+  const sv = document.getElementById('range-start').value;
+  const ev = document.getElementById('range-end').value;
+  if (!sv || !ev) return;
+  const [sy, sm] = sv.split('-').map(Number); const [ey, em] = ev.split('-').map(Number);
+  const months = []; let y = sy, m = sm - 1;
+  while (y < ey || (y === ey && m <= em - 1)) { months.push({ y, m }); m++; if (m > 11) { m = 0; y++; } }
+  let html = '';
+  months.forEach(({ y, m }) => {
+    const key = mkKey(y, m);
+    const total = subs.reduce((s, sub) => s + (+sub.amount || 0), 0);
+    const paidCnt = subs.filter(s => isPaid(s, key)).length;
+    const sorted = [...subs].sort((a, b) => getEffectiveDay(a, y, m) - getEffectiveDay(b, y, m));
+    html += `<div class="list-month-block"><div class="list-month-head"><h3>${y}年${m + 1}月</h3><span class="list-month-sub">${paidCnt}/${subs.length}件済</span><span class="list-month-total">${fmt(total)}</span></div>`;
+    if (sorted.length === 0) { html += `<p style="color:var(--text2);font-size:14px;padding:20px 0;">サブスクがありません</p></div>`; return; }
+    html += `<table class="list-table"><thead><tr><th>サービス</th><th>支払日</th><th>金額</th><th>支払方法</th><th>状況</th><th></th></tr></thead><tbody>`;
+    sorted.forEach(sub => {
+      const paid = isPaid(sub, key); const od = isOverdue(sub, key);
+      const effDay = getEffectiveDay(sub, y, m);
+      const hasOverride = sub.override_days && sub.override_days[key] != null;
+      const statusBadge = paid ? `<span class="badge badge-paid">✓ 済</span>` : od ? `<span class="badge badge-overdue">期限超過</span>` : `<span class="badge badge-unpaid">未払い</span>`;
+      html += `<tr onclick="openDetail('${sub.id}','${key}')">
+        <td><div class="list-logo-cell">
+          <div class="list-logo">${sub.logo ? `<img src="${sub.logo}" alt="">` : sub.emoji || '📦'}</div>
+          <div><div class="list-item-name">${sub.name}</div>${sub.memo ? `<div class="list-item-meta">${sub.memo}</div>` : ''}</div>
+        </div></td>
+        <td style="color:var(--text2);">${m + 1}月${effDay}日${hasOverride ? ' ✎' : ''}</td>
+        <td style="font-family:var(--mono);font-weight:500;${od && !paid ? 'color:var(--red)' : ''}">${fmt(sub.amount)}</td>
+        <td style="color:var(--text2);">${sub.method || '—'}</td>
+        <td>${statusBadge}</td>
+        <td onclick="event.stopPropagation()"><button class="paid-toggle-btn ${paid ? 'is-paid' : ''}" onclick="quickTogglePaid('${sub.id}','${key}',this)">${paid ? '済✓' : '済にする'}</button></td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+  document.getElementById('list-content').innerHTML = html || '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">表示するデータがありません</div></div>';
+}
+
+async function quickTogglePaid(subId, key, btn) {
+  const sub = subs.find(s => s.id === subId); if (!sub) return;
+  if (!sub.paid_months) sub.paid_months = {};
+  sub.paid_months[key] = !sub.paid_months[key];
+  btn.textContent = sub.paid_months[key] ? '済✓' : '済にする';
+  btn.className = 'paid-toggle-btn' + (sub.paid_months[key] ? ' is-paid' : '');
+  await upsertSub(sub);
+  renderCalendar();
+}
+
+// ── Subs List ──
+function renderSubsList() {
+  const el = document.getElementById('subs-grid');
+  if (subs.length === 0) { el.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">💳</div><div class="empty-title">サブスクがありません</div><div class="empty-msg">＋ボタンから追加してください</div></div>`; return; }
+  el.innerHTML = [...subs].sort((a, b) => a.day - b.day).map(sub => `
+    <div class="sub-card" onclick="openDetail('${sub.id}','${curKey()}')">
+      <div class="sub-card-logo">${sub.logo ? `<img src="${sub.logo}" alt="">` : sub.emoji || '📦'}</div>
+      <div class="sub-card-info">
+        <div class="sub-card-name">${sub.name}</div>
+        <div class="sub-card-meta">ID:${sub.seq_id} · 毎月${sub.day}日 · ${sub.method || '未設定'}</div>
+      </div>
+      <div class="sub-card-amt">${fmt(sub.amount)}</div>
+    </div>`).join('');
+}
+
+// ── Settings ──
+function renderSettings() {
+  const el = document.getElementById('method-tags');
+  el.innerHTML = methods.map((m, i) => `<div class="method-tag">${m}<button class="method-tag-del" onclick="deleteMethod(${i})">×</button></div>`).join('');
+}
+
+async function addMethod() {
+  const input = document.getElementById('new-method-input');
+  const val = input.value.trim(); if (!val) return;
+  if (!methods.includes(val)) { methods.push(val); await saveMethods(); }
+  input.value = ''; renderSettings();
+}
+
+async function deleteMethod(idx) {
+  methods.splice(idx, 1); await saveMethods(); renderSettings();
+}
+
+// ── Detail Sheet ──
+function openDetail(subId, key) {
+  const sub = subs.find(s => s.id === subId); if (!sub) return;
+  detailSubId = subId; detailMonthKey = key;
+  const [ky, km] = key.split('-').map(Number);
+  const effDay = getEffectiveDay(sub, ky, km - 1);
+  const hasOverride = sub.override_days && sub.override_days[key] != null;
+  const paid = isPaid(sub, key); const od = isOverdue(sub, key);
+  const statusBadge = paid ? `<span class="badge badge-paid">✓ 支払済</span>` : od ? `<span class="badge badge-overdue">期限超過</span>` : `<span class="badge badge-unpaid">未払い</span>`;
+  document.getElementById('detail-body').innerHTML = `
+    <div style="text-align:center;padding:8px 0 20px;">
+      <div style="width:72px;height:72px;border-radius:18px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;border:1px solid var(--border2);margin:0 auto 12px;">${sub.logo ? `<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;">` : sub.emoji || '📦'}</div>
+      <div style="font-size:22px;font-weight:700;">${sub.name}</div>
+      <div style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--accent);margin-top:4px;">${fmt(sub.amount)}/月</div>
+    </div>
+    <div style="border-top:1px solid var(--border);">
+      ${[['支払ID', sub.seq_id],['基本支払日','毎月'+sub.day+'日'],['今月の支払日',km+'月'+effDay+'日'+(hasOverride?' ✎上書き中':'')],['支払方法',sub.method||'未設定'],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;padding-bottom:4px;">
+      <button class="btn ${paid ? 'btn-ghost' : 'btn-primary'}" style="width:100%;justify-content:center;" onclick="togglePaid('${subId}','${key}')">${paid ? '未払いに戻す' : '支払済にする'}</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="closeSheet('detail-overlay');openOverrideSheet('${subId}','${key}')">📅 支払日を上書き</button>
+        <button class="btn btn-ghost" style="flex:1;justify-content:center;" onclick="closeSheet('detail-overlay');openEditSheet('${subId}')">✏️ 編集</button>
+      </div>
+      <button class="btn btn-danger" style="width:100%;justify-content:center;" onclick="confirmDelete('${subId}')">削除する</button>
+    </div>`;
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+async function togglePaid(subId, key) {
+  const sub = subs.find(s => s.id === subId); if (!sub) return;
+  if (!sub.paid_months) sub.paid_months = {};
+  sub.paid_months[key] = !sub.paid_months[key];
+  await upsertSub(sub);
+  render(); openDetail(subId, key);
+}
+
+// ── Override ──
+function openOverrideSheet(subId, key) {
+  overrideSubId = subId; overrideMonthKey = key;
+  const sub = subs.find(s => s.id === subId);
+  const [ky, km] = key.split('-').map(Number);
+  const effDay = getEffectiveDay(sub, ky, km - 1);
+  const hasOverride = sub.override_days && sub.override_days[key] != null;
+  document.getElementById('override-desc').textContent = `${sub.name} の ${ky}年${km}月の支払日（現在：${km}月${effDay}日${hasOverride ? ' ※上書き中' : ''}）`;
+  const info = document.getElementById('override-info');
+  if (hasOverride) { info.textContent = `現在${km}月${sub.override_days[key]}日に上書きされています`; info.classList.add('visible'); } else { info.classList.remove('visible'); }
+  document.getElementById('override-day-input').value = hasOverride ? sub.override_days[key] : effDay;
+  document.getElementById('override-clear-btn').style.display = hasOverride ? 'inline-flex' : 'none';
+  document.getElementById('override-overlay').classList.add('open');
+}
+
+async function saveOverride() {
+  const sub = subs.find(s => s.id === overrideSubId); if (!sub) return;
+  const day = parseInt(document.getElementById('override-day-input').value);
+  if (isNaN(day) || day < 1 || day > 31) { showToast('1〜31の数字を入力してください'); return; }
+  if (!sub.override_days) sub.override_days = {};
+  sub.override_days[overrideMonthKey] = day;
+  await upsertSub(sub); render(); closeSheet('override-overlay');
+  openDetail(overrideSubId, overrideMonthKey); showToast('支払日を上書きしました');
+}
+
+async function clearOverride() {
+  const sub = subs.find(s => s.id === overrideSubId); if (!sub || !sub.override_days) return;
+  delete sub.override_days[overrideMonthKey];
+  await upsertSub(sub); render(); closeSheet('override-overlay');
+  openDetail(overrideSubId, overrideMonthKey); showToast('上書きを解除しました');
+}
+
+// ── Add/Edit ──
+function openAddSheet() {
+  editingId = null; pendingLogo = null; selectedMethod = '';
+  document.getElementById('edit-title').textContent = 'サブスクを追加';
+  ['f-name','f-amount','f-day','f-memo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('logo-prev').innerHTML = '📦';
+  document.getElementById('f-paid-toggle').classList.remove('on');
+  renderMethodList();
+  document.getElementById('edit-overlay').classList.add('open');
+}
+
+function openEditSheet(subId) {
+  const sub = subs.find(s => s.id === subId); if (!sub) return;
+  editingId = subId; pendingLogo = sub.logo || null; selectedMethod = sub.method || '';
+  document.getElementById('edit-title').textContent = 'サブスクを編集';
+  document.getElementById('f-name').value = sub.name;
+  document.getElementById('f-amount').value = sub.amount;
+  document.getElementById('f-day').value = sub.day;
+  document.getElementById('f-memo').value = sub.memo || '';
+  document.getElementById('logo-prev').innerHTML = sub.logo ? `<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">` : sub.emoji || '📦';
+  document.getElementById('f-paid-toggle').className = 'toggle' + (isPaid(sub) ? ' on' : '');
+  renderMethodList();
+  document.getElementById('edit-overlay').classList.add('open');
+}
+
+function renderMethodList() {
+  document.getElementById('edit-method-list').innerHTML =
+    methods.map(m => `<div class="method-option ${selectedMethod === m ? 'selected' : ''}" onclick="selectMethod('${m}')">${m}${selectedMethod === m ? '<span style="color:var(--accent)">✓</span>' : ''}</div>`).join('') +
+    `<div class="method-add-inline"><input class="method-add-input-inline" id="inline-method-input" placeholder="新しい支払方法を追加…"><button class="method-add-btn-inline" onclick="addMethodInline()">追加</button></div>`;
+}
+
+function selectMethod(m) { selectedMethod = m; renderMethodList(); }
+
+async function addMethodInline() {
+  const input = document.getElementById('inline-method-input');
+  const val = input.value.trim(); if (!val) return;
+  if (!methods.includes(val)) { methods.push(val); await saveMethods(); }
+  selectedMethod = val; renderMethodList();
+}
+
+function previewLogo(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { pendingLogo = e.target.result; document.getElementById('logo-prev').innerHTML = `<img src="${pendingLogo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`; };
+  reader.readAsDataURL(file);
+}
+
+async function saveSub() {
+  const name = document.getElementById('f-name').value.trim();
+  const amount = document.getElementById('f-amount').value;
+  const day = document.getElementById('f-day').value;
+  if (!name || !amount || !day) { showToast('サービス名・金額・支払日は必須です'); return; }
+  const paidToggle = document.getElementById('f-paid-toggle').classList.contains('on');
+  const key = curKey();
+
+  if (editingId) {
+    const sub = subs.find(s => s.id === editingId); if (!sub) return;
+    Object.assign(sub, { name, amount: +amount, day: +day, method: selectedMethod, memo: document.getElementById('f-memo').value });
+    if (pendingLogo !== null) sub.logo = pendingLogo;
+    if (!sub.paid_months) sub.paid_months = {};
+    sub.paid_months[key] = paidToggle;
+    await upsertSub(sub);
+  } else {
+    const pm = {}; pm[key] = paidToggle;
+    const newSub = { seq_id: nextSeqId(), name, amount: +amount, day: +day, method: selectedMethod, memo: document.getElementById('f-memo').value, logo: pendingLogo || null, emoji: '📦', paid_months: pm, override_days: {} };
+    const { data, error } = await supabase.from('subscriptions').insert(newSub).select().single();
+    if (error) { showToast('追加に失敗しました: ' + error.message); return; }
+    subs.push(data);
+  }
+  closeSheet('edit-overlay'); render();
+  if (currentPage === 'subs') renderSubsList();
+  showToast('保存しました');
+}
+
+// ── Delete ──
+function confirmDelete(subId) {
+  const sub = subs.find(s => s.id === subId); if (!sub) return;
+  document.getElementById('confirm-msg').textContent = `「${sub.name}」を削除しますか？この操作は取り消せません。`;
+  document.getElementById('confirm-ok').onclick = async () => { await deleteSub(subId); closeSheet('confirm-overlay'); closeSheet('detail-overlay'); showToast('削除しました'); };
+  closeSheet('detail-overlay');
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+// ── CSV ──
+function exportCSV() {
+  const header = ['ID', 'サービス名', '金額', '支払日', '支払方法', 'メモ'];
+  const rows = subs.map(s => [s.seq_id, s.name, s.amount, s.day, s.method || '', s.memo || '']);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = `subs_${curKey()}.csv`; a.click(); URL.revokeObjectURL(url);
+  showToast('CSVをエクスポートしました');
+}
+
+async function importCSV(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const text = e.target.result.replace(/^\uFEFF/, '');
+    const lines = text.trim().split(/\r?\n/); if (lines.length < 2) return;
+    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    const fi = (...cs) => { for (const c of cs) { const i = headers.findIndex(h => h.includes(c)); if (i >= 0) return i; } return -1; };
+    const nameI = fi('サービス名', 'name'), amtI = fi('金額', 'amount'), dayI = fi('支払日', 'day'), methI = fi('支払方法', 'method'), memoI = fi('メモ', 'memo');
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.replace(/"/g, '').trim());
+      if (!cols[nameI]) continue;
+      const newSub = { seq_id: nextSeqId(), name: cols[nameI], amount: +(cols[amtI] || 0), day: +(cols[dayI] || 1), method: methI >= 0 ? cols[methI] : '', memo: memoI >= 0 ? cols[memoI] : '', logo: null, emoji: '📦', paid_months: {}, override_days: {} };
+      const { data } = await supabase.from('subscriptions').insert(newSub).select().single();
+      if (data) subs.push(data);
+    }
+    render(); showToast('CSVをインポートしました');
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+
+// ── Sheet helpers ──
+function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+function overlayClick(e, id) { if (e.target === document.getElementById(id)) closeSheet(id); }
+
+function render() {
+  renderCalendar();
+  if (currentPage === 'list') renderList();
+  if (currentPage === 'subs') renderSubsList();
+}
+
+// ── Auto-connect ──
+window.addEventListener('load', () => {
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (url && key) {
+    document.getElementById('setup-url').value = url;
+    document.getElementById('setup-key').value = key;
+    supabase = window.supabase.createClient(url, key);
+    document.getElementById('setup-screen').style.display = 'none';
+    startApp();
+  }
+});
+</script>
+</body>
+</html>
