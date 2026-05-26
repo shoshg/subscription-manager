@@ -768,7 +768,7 @@ select.form-input { appearance: none; cursor: pointer; }
 
 <script>
 // ── Supabase ──
-let supabase = null;
+let sbClient = null;
 let subs = [];
 let methods = ['クレジットカード','デビットカード','銀行引き落とし','電子マネー','その他'];
 let currentYear = new Date().getFullYear();
@@ -840,9 +840,9 @@ async function initSupabase() {
   if (!url || !key) { errEl.textContent = 'URLとAPIキーを両方入力してください'; errEl.style.display = 'block'; return; }
 
   try {
-    supabase = window.supabase.createClient(url, key);
+    sbClient = window.supabase.createClient(url, key);
     // テスト接続
-    const { error } = await supabase.from('subscriptions').select('id').limit(1);
+    const { error } = await sbClient.from('subscriptions').select('id').limit(1);
     if (error) throw error;
     localStorage.setItem('sb_url', url);
     localStorage.setItem('sb_key', key);
@@ -872,19 +872,19 @@ function logout() {
 
 // ── Data: Subs ──
 async function loadSubs() {
-  const { data, error } = await supabase.from('subscriptions').select('*').order('day', { ascending: true });
+  const { data, error } = await sbClient.from('subscriptions').select('*').order('day', { ascending: true });
   if (error) { showToast('データの読み込みに失敗しました'); return; }
   subs = data || [];
 }
 
 async function upsertSub(sub) {
-  const { error } = await supabase.from('subscriptions').upsert(sub);
+  const { error } = await sbClient.from('subscriptions').upsert(sub);
   if (error) { showToast('保存に失敗しました: ' + error.message); return false; }
   return true;
 }
 
 async function deleteSub(id) {
-  const { error } = await supabase.from('subscriptions').delete().eq('id', id);
+  const { error } = await sbClient.from('subscriptions').delete().eq('id', id);
   if (error) { showToast('削除に失敗しました'); return; }
   subs = subs.filter(s => s.id !== id);
   render();
@@ -892,12 +892,12 @@ async function deleteSub(id) {
 
 // ── Data: Methods ──
 async function loadMethods() {
-  const { data } = await supabase.from('settings').select('value').eq('key', 'methods').single();
+  const { data } = await sbClient.from('settings').select('value').eq('key', 'methods').single();
   if (data && data.value) methods = data.value;
 }
 
 async function saveMethods() {
-  await supabase.from('settings').upsert({ key: 'methods', value: methods });
+  await sbClient.from('settings').upsert({ key: 'methods', value: methods });
 }
 
 // ── Page Switching ──
@@ -1213,7 +1213,7 @@ async function saveSub() {
   } else {
     const pm = {}; pm[key] = paidToggle;
     const newSub = { seq_id: nextSeqId(), name, amount: +amount, day: +day, method: selectedMethod, memo: document.getElementById('f-memo').value, logo: pendingLogo || null, emoji: '📦', paid_months: pm, override_days: {} };
-    const { data, error } = await supabase.from('subscriptions').insert(newSub).select().single();
+    const { data, error } = await sbClient.from('subscriptions').insert(newSub).select().single();
     if (error) { showToast('追加に失敗しました: ' + error.message); return; }
     subs.push(data);
   }
@@ -1255,7 +1255,7 @@ async function importCSV(event) {
       const cols = lines[i].split(',').map(c => c.replace(/"/g, '').trim());
       if (!cols[nameI]) continue;
       const newSub = { seq_id: nextSeqId(), name: cols[nameI], amount: +(cols[amtI] || 0), day: +(cols[dayI] || 1), method: methI >= 0 ? cols[methI] : '', memo: memoI >= 0 ? cols[memoI] : '', logo: null, emoji: '📦', paid_months: {}, override_days: {} };
-      const { data } = await supabase.from('subscriptions').insert(newSub).select().single();
+      const { data } = await sbClient.from('subscriptions').insert(newSub).select().single();
       if (data) subs.push(data);
     }
     render(); showToast('CSVをインポートしました');
@@ -1281,7 +1281,7 @@ window.addEventListener('load', () => {
   if (url && key) {
     document.getElementById('setup-url').value = url;
     document.getElementById('setup-key').value = key;
-    supabase = window.supabase.createClient(url, key);
+    sbClient = window.supabase.createClient(url, key);
     document.getElementById('setup-screen').style.display = 'none';
     startApp();
   }
