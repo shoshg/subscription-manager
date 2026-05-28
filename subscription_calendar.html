@@ -90,7 +90,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 /* Bottom nav */
 .bottom-nav{background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px);flex-shrink:0;}
 .nav-items{display:flex;}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 0 14px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:64px;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 0 16px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:72px;}
 .nav-item.active{color:var(--accent);}
 .nav-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;}
 .nav-icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s;}
@@ -568,21 +568,13 @@ select.form-input{appearance:none;cursor:pointer;}
       <div id="f-monthly-opts">
         <div class="form-group">
           <label class="form-label">毎月の支払日 * （土日祝日は自動で翌平日に）</label>
-          <select class="form-input" id="f-day-select" onchange="onDaySelectChange()">
-            <option value="">日付を選択</option>
-            ${Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}日</option>`).join('')}
-            <option value="0">月末日</option>
-          </select>
+          <select class="form-input" id="f-day-select"></select>
         </div>
       </div>
       <div id="f-bimonthly-opts" style="display:none;">
         <div class="form-group">
           <label class="form-label">支払日 * （土日祝日は自動で翌平日に）</label>
-          <select class="form-input" id="f-biday-select">
-            <option value="">日付を選択</option>
-            ${Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}日</option>`).join('')}
-            <option value="0">月末日</option>
-          </select>
+          <select class="form-input" id="f-biday-select"></select>
         </div>
       </div>
       <div id="f-yearly-opts" style="display:none;">
@@ -1146,17 +1138,34 @@ function renderSubStats(){
   if(subs.length===0){document.getElementById('stats-sub-content').innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📊</div><div class="empty-title">サブスクがありません</div></div>`;return;}
   subs.forEach(sub=>{
     const freq=sub.freq||'monthly';
-    let yearlyAmt=0,totalAmt=0;
-    if(freq==='monthly'){yearlyAmt=sub.amount*12;totalAmt=sub.amount*12;}
-    else if(freq==='yearly'){yearlyAmt=sub.amount;totalAmt=sub.amount;}
-    else{totalAmt=sub.amount;yearlyAmt=0;}
+    let yearlyAmt=0;
+    if(freq==='monthly')yearlyAmt=sub.amount*12;
+    else if(freq==='bimonthly-odd'||freq==='bimonthly-even')yearlyAmt=sub.amount*6;
+    else if(freq==='yearly')yearlyAmt=sub.amount;
 
-    // Count paid months for total
     let paidTotal=0;
     if(sub.paid_months){
       Object.entries(sub.paid_months).forEach(([k,v])=>{
-        if(v){const[ky,km]=k.split('-').map(Number);const amt=getEffectiveAmount(sub,k);paidTotal+=amt;}
+        if(v){const amt=getEffectiveAmount(sub,k);paidTotal+=amt;}
       });
+    }
+
+    // 現時点での未払い計算（過去〜今月で支払日が来ているのに未払いのもの）
+    let unpaidCount=0,unpaidTotal=0;
+    const todayY=now.getFullYear(),todayM=now.getMonth();
+    // 過去24ヶ月分をチェック
+    for(let i=0;i<24;i++){
+      let y=todayY,m=todayM-i;
+      while(m<0){m+=12;y--;}
+      const key=mkKey(y,m);
+      const effDay=getEffectiveDay(sub,y,m);
+      if(!effDay)continue;
+      const payDate=new Date(y,m,effDay);
+      const todayMid=new Date(todayY,todayM,now.getDate());
+      if(payDate<=todayMid&&!isPaid(sub,key)){
+        unpaidCount++;
+        unpaidTotal+=getEffectiveAmount(sub,key);
+      }
     }
 
     html+=`<div class="stats-card">
@@ -1167,6 +1176,7 @@ function renderSubStats(){
       <div class="stats-row"><span class="k">月額</span><span class="v">${freq==='monthly'?fmt(sub.amount):'—'}</span></div>
       <div class="stats-row"><span class="k">年間（概算）</span><span class="v">${yearlyAmt>0?fmt(yearlyAmt):'—'}</span></div>
       <div class="stats-row"><span class="k">支払済合計</span><span class="v" style="color:var(--green);">${fmt(paidTotal)}</span></div>
+      ${unpaidCount>0?`<div class="stats-row"><span class="k" style="color:var(--red);">未払い</span><span class="v" style="color:var(--red);">${unpaidCount}件 / ${fmt(unpaidTotal)}</span></div>`:''}
       <div class="stats-row"><span class="k">支払元</span><span class="v">${sub.pay_source||'—'}</span></div>
     </div>`;
   });
@@ -1234,7 +1244,9 @@ async function togglePaid(subId,key){
   const sub=subs.find(s=>s.id===subId);if(!sub)return;
   if(!sub.paid_months)sub.paid_months={};
   sub.paid_months[key]=!sub.paid_months[key];
-  await upsertSub(sub);render();openDetail(subId,key);
+  await upsertSub(sub);render();
+  closeSheet('detail-overlay');
+  showToast(sub.paid_months[key]?'支払済にしました':'未払いに戻しました');
 }
 
 // ── Override ──
@@ -1275,14 +1287,24 @@ async function clearOverride(){
 }
 
 // ── Add/Edit ──
+function buildDayOptions(selectId, selectedVal){
+  const sel=document.getElementById(selectId);
+  if(!sel)return;
+  let html='<option value="">日付を選択</option>';
+  for(let i=1;i<=31;i++) html+=`<option value="${i}">${i}日</option>`;
+  html+='<option value="0">月末日</option>';
+  sel.innerHTML=html;
+  if(selectedVal!==undefined&&selectedVal!==null&&selectedVal!=='') sel.value=String(selectedVal);
+}
+
 function onFreqChange(){
   const freq=document.getElementById('f-freq').value;
-  document.getElementById('f-monthly-opts').style.display=(freq==='monthly'||freq==='bimonthly-odd'||freq==='bimonthly-even')?'none':'none';
-  // 毎月・2ヶ月系は同じ日付selectを使う
-  document.getElementById('f-monthly-opts').style.display=(freq==='monthly')?'block':'none';
+  document.getElementById('f-monthly-opts').style.display=freq==='monthly'?'block':'none';
   document.getElementById('f-bimonthly-opts').style.display=(freq==='bimonthly-odd'||freq==='bimonthly-even')?'block':'none';
   document.getElementById('f-yearly-opts').style.display=freq==='yearly'?'block':'none';
   document.getElementById('f-once-opts').style.display=freq==='once'?'block':'none';
+  buildDayOptions('f-day-select');
+  buildDayOptions('f-biday-select');
 }
 
 function onDaySelectChange(){}
@@ -1309,8 +1331,8 @@ function openEditSheet(subId){
   document.getElementById('f-memo').value=sub.memo||'';
   const freq=sub.freq||'monthly';
   document.getElementById('f-freq').value=freq;onFreqChange();
-  if(freq==='monthly'){document.getElementById('f-day-select').value=sub.day??'';}
-  if(freq==='bimonthly-odd'||freq==='bimonthly-even'){document.getElementById('f-biday-select').value=sub.day??'';}
+  if(freq==='monthly'){buildDayOptions('f-day-select', sub.day??'');}
+  if(freq==='bimonthly-odd'||freq==='bimonthly-even'){buildDayOptions('f-biday-select', sub.day??'');}
   if(freq==='yearly'){document.getElementById('f-yearly-month').value=sub.yearly_month||'';document.getElementById('f-yearly-day').value=sub.yearly_day||'';}
   if(freq==='once')document.getElementById('f-once-date').value=sub.once_date||'';
   document.getElementById('f-end-month').value=sub.end_month||'';
