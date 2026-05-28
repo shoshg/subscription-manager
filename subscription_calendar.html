@@ -89,10 +89,11 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 /* Bottom nav */
 .bottom-nav{background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px);flex-shrink:0;}
 .nav-items{display:flex;}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:10px 0 12px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .12s;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 0 14px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:64px;}
 .nav-item.active{color:var(--accent);}
-.nav-icon{font-size:20px;}
-.nav-label{font-size:10px;font-weight:500;}
+.nav-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;}
+.nav-icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s;}
+.nav-label{font-size:10px;font-weight:500;letter-spacing:.2px;}
 
 /* Buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:var(--font);font-size:14px;font-weight:500;padding:10px 18px;border-radius:12px;border:1px solid var(--border2);cursor:pointer;transition:all .15s;white-space:nowrap;}
@@ -297,6 +298,16 @@ select.form-input{appearance:none;cursor:pointer;}
 .toast{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:10px 20px;font-size:13px;font-weight:500;z-index:400;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap;}
 .toast.show{opacity:1;}
 @media(min-width:768px){.toast{bottom:24px;}}
+/* Archive */
+.archived-section{margin-top:24px;}
+.archived-toggle{display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--border2);border-radius:12px;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:500;padding:10px 16px;cursor:pointer;transition:all .12s;width:100%;}
+.archived-toggle:hover{border-color:var(--border2);background:var(--surface2);}
+.archived-toggle svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s;}
+.archived-toggle.open svg.chevron{transform:rotate(180deg);}
+.archived-grid{margin-top:10px;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));}
+.sub-card.archived{opacity:.5;}
+.sub-card.archived:hover{opacity:.75;}
+.archive-badge{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface3);color:var(--text3);font-weight:600;border:1px solid var(--border);margin-left:auto;flex-shrink:0;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-thumb{background:var(--surface4);border-radius:2px;}
 </style>
@@ -492,11 +503,26 @@ select.form-input{appearance:none;cursor:pointer;}
 
     <nav class="bottom-nav">
       <div class="nav-items">
-        <button class="nav-item active" id="nav-cal" onclick="switchPage('cal')"><span class="nav-icon">📅</span><span class="nav-label">カレンダー</span></button>
-        <button class="nav-item" id="nav-list" onclick="switchPage('list')"><span class="nav-icon">📋</span><span class="nav-label">月別</span></button>
-        <button class="nav-item" id="nav-subs" onclick="switchPage('subs')"><span class="nav-icon">💳</span><span class="nav-label">サブスク</span></button>
-        <button class="nav-item" id="nav-stats" onclick="switchPage('stats')"><span class="nav-icon">📊</span><span class="nav-label">集計</span></button>
-        <button class="nav-item" id="nav-settings" onclick="switchPage('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">設定</span></button>
+        <button class="nav-item active" id="nav-cal" onclick="switchPage('cal')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          <span class="nav-label">カレンダー</span>
+        </button>
+        <button class="nav-item" id="nav-list" onclick="switchPage('list')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span>
+          <span class="nav-label">月別</span>
+        </button>
+        <button class="nav-item" id="nav-subs" onclick="switchPage('subs')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+          <span class="nav-label">サブスク</span>
+        </button>
+        <button class="nav-item" id="nav-stats" onclick="switchPage('stats')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+          <span class="nav-label">集計</span>
+        </button>
+        <button class="nav-item" id="nav-settings" onclick="switchPage('settings')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+          <span class="nav-label">設定</span>
+        </button>
       </div>
     </nav>
   </div>
@@ -520,8 +546,8 @@ select.form-input{appearance:none;cursor:pointer;}
         <div class="logo-upload" onclick="document.getElementById('logo-file').click()">
           <div class="logo-prev" id="logo-prev">📦</div>
           <p>クリック／タップして画像を選択</p>
-          <input type="file" id="logo-file" accept="image/*" onchange="previewLogo(event)">
         </div>
+        <input type="file" id="logo-file" accept="image/*" style="display:none" onchange="previewLogo(event)">
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">サービス名 *</label><input class="form-input" id="f-name" placeholder="Netflix"></div>
@@ -556,6 +582,11 @@ select.form-input{appearance:none;cursor:pointer;}
         <div class="method-option-list" id="edit-method-list"></div>
       </div>
       <div class="form-group"><label class="form-label">メモ</label><input class="form-input" id="f-memo" placeholder="ファミリープランなど"></div>
+      <div class="form-group">
+        <label class="form-label">終了月（解約月・任意）</label>
+        <input class="form-input" id="f-end-month" type="month" placeholder="例：2025-12">
+        <div style="font-size:11px;color:var(--text3);margin-top:5px;">設定すると翌月以降のカレンダーに表示されなくなります</div>
+      </div>
       <div class="form-group">
         <div class="toggle-row"><span class="toggle-label">今月分を支払済にする</span><button class="toggle" id="f-paid-toggle" onclick="this.classList.toggle('on')"></button></div>
       </div>
@@ -658,7 +689,31 @@ function adjustForHoliday(y,m,day){
   return Math.min(d,new Date(y,m+1,0).getDate());
 }
 
+function isArchived(sub){
+  if(!sub.end_month)return false;
+  const[ey,em]=sub.end_month.split('-').map(Number);
+  const endDate=new Date(ey,em-1,1);// end_monthの月まではOK
+  return false; // アーカイブ判定はisActiveForMonthで行う
+}
+
+function isActiveForMonth(sub,y,m){
+  // 終了月が設定されていて、その翌月以降なら非表示
+  if(sub.end_month){
+    const[ey,em]=sub.end_month.split('-').map(Number);
+    if(y>ey||(y===ey&&m+1>em))return false;
+  }
+  return true;
+}
+
+function isSubArchived(sub){
+  if(!sub.end_month)return false;
+  const now=new Date();
+  const[ey,em]=sub.end_month.split('-').map(Number);
+  return now.getFullYear()>ey||(now.getFullYear()===ey&&now.getMonth()+1>em);
+}
+
 function getEffectiveDay(sub,y,m){
+  if(!isActiveForMonth(sub,y,m))return null;
   const key=mkKey(y,m);
   if(sub.override_days&&sub.override_days[key]!=null)return sub.override_days[key];
   if(sub.freq==='yearly'){
@@ -836,8 +891,9 @@ async function renderCalendar(){
       const amt=getEffectiveAmount(sub,key);
       const logoHtml=sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦';
       html+=`<div class="cal-chip ${paid?'paid':od?'overdue':''}" onclick="openDetail('${sub.id}','${key}')">
-        <div class="chip-logo">${logoHtml}</div>
-        ${calViewMode==='amount'?`<div class="chip-amt ${od&&!paid?'overdue':''}">${fmt(amt)}</div>`:`<div class="chip-amt" style="font-size:10px;">${sub.name}</div>`}
+        ${calViewMode==='logo'
+          ?`<div class="chip-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div>`
+          :`<div class="chip-amt ${od&&!paid?'overdue':''}" style="flex:1;">${fmt(amt)}</div>`}
         ${paid?'<div class="chip-check">✓</div>':''}
       </div>`;
     });
@@ -914,19 +970,41 @@ async function quickTogglePaid(subId,key,btn){
 }
 
 // ── Subs List ──
+let archivedOpen=false;
 function renderSubsList(){
   const el=document.getElementById('subs-grid');
   if(subs.length===0){el.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">💳</div><div class="empty-title">サブスクがありません</div><div class="empty-msg">＋ボタンから追加してください</div></div>`;return;}
   const freqLabel={monthly:'毎月',yearly:'毎年',once:'1回のみ'};
-  el.innerHTML=[...subs].sort((a,b)=>(a.day||0)-(b.day||0)).map(sub=>`
-    <div class="sub-card" onclick="openDetail('${sub.id}','${curKey()}')">
+  const activeSubs=subs.filter(s=>!isSubArchived(s));
+  const archivedSubs=subs.filter(s=>isSubArchived(s));
+  const cardHtml=sub=>`
+    <div class="sub-card${isSubArchived(sub)?' archived':''}" onclick="openDetail('${sub.id}','${curKey()}')">
       <div class="sub-card-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div>
       <div class="sub-card-info">
         <div class="sub-card-name">${sub.name}</div>
         <div class="sub-card-meta">ID:${sub.seq_id} · ${freqLabel[sub.freq||'monthly']} · ${sub.pay_source||sub.method||'未設定'}</div>
       </div>
       <div class="sub-card-amt">${fmt(sub.amount)}</div>
-    </div>`).join('');
+      ${isSubArchived(sub)?`<div class="archive-badge">解約済</div>`:''}
+    </div>`;
+  let html=[...activeSubs].sort((a,b)=>(a.day||0)-(b.day||0)).map(cardHtml).join('');
+  if(archivedSubs.length>0){
+    html+=`<div class="archived-section" style="grid-column:1/-1;">
+      <button class="archived-toggle${archivedOpen?' open':''}" onclick="toggleArchivedSection()">
+        <svg viewBox="0 0 24 24" class="chevron"><polyline points="6 9 12 15 18 9"/></svg>
+        解約済サブスク（${archivedSubs.length}件）
+      </button>
+      <div class="archived-grid" style="display:${archivedOpen?'grid':'none'};">
+        ${[...archivedSubs].sort((a,b)=>(a.day||0)-(b.day||0)).map(cardHtml).join('')}
+      </div>
+    </div>`;
+  }
+  el.innerHTML=html||`<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">💳</div><div class="empty-title">アクティブなサブスクがありません</div></div>`;
+}
+
+function toggleArchivedSection(){
+  archivedOpen=!archivedOpen;
+  renderSubsList();
 }
 
 // ── Stats ──
@@ -1064,6 +1142,7 @@ function openDetail(subId,key){
   const paid=isPaid(sub,key);const od=isOverdue(sub,key);
   const amt=getEffectiveAmount(sub,key);
   const freqLabel={monthly:'毎月',yearly:'毎年',once:'1回のみ'};
+  const endMonthLabel=sub.end_month?sub.end_month.replace('-','年')+'月':'未設定';
   const statusBadge=paid?`<span class="badge badge-paid">✓ 支払済</span>`:od?`<span class="badge badge-overdue">期限超過</span>`:`<span class="badge badge-unpaid">未払い</span>`;
   document.getElementById('detail-body').innerHTML=`
     <div style="text-align:center;padding:8px 0 20px;">
@@ -1072,7 +1151,7 @@ function openDetail(subId,key){
       <div style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--accent);margin-top:4px;">${fmt(amt)}/月</div>
     </div>
     <div style="border-top:1px solid var(--border);">
-      ${[['支払ID',sub.seq_id],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',sub.pay_source||'未設定'],['支払方法',sub.method||'未設定'],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
+      ${[['支払ID',sub.seq_id],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',sub.pay_source||'未設定'],['支払方法',sub.method||'未設定'],['終了月',endMonthLabel],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;padding-bottom:4px;">
       <button class="btn ${paid?'btn-ghost':'btn-primary'}" style="width:100%;justify-content:center;" onclick="togglePaid('${subId}','${key}')">${paid?'未払いに戻す':'支払済にする'}</button>
@@ -1140,7 +1219,7 @@ function onFreqChange(){
 function openAddSheet(){
   editingId=null;pendingLogo=null;selectedMethod='';selectedSource='';
   document.getElementById('edit-title').textContent='サブスクを追加';
-  ['f-name','f-amount','f-day','f-memo','f-yearly-month','f-yearly-day','f-once-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['f-name','f-amount','f-day','f-memo','f-yearly-month','f-yearly-day','f-once-date','f-end-month'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-freq').value='monthly';onFreqChange();
   document.getElementById('logo-prev').innerHTML='📦';
   document.getElementById('f-paid-toggle').classList.remove('on');
@@ -1160,6 +1239,7 @@ function openEditSheet(subId){
   if(freq==='monthly')document.getElementById('f-day').value=sub.day||'';
   if(freq==='yearly'){document.getElementById('f-yearly-month').value=sub.yearly_month||'';document.getElementById('f-yearly-day').value=sub.yearly_day||'';}
   if(freq==='once')document.getElementById('f-once-date').value=sub.once_date||'';
+  document.getElementById('f-end-month').value=sub.end_month||'';
   document.getElementById('logo-prev').innerHTML=sub.logo?`<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`:sub.emoji||'📦';
   document.getElementById('f-paid-toggle').className='toggle'+(isPaid(sub)?' on':'');
   renderMethodList();renderSourceList();
@@ -1195,7 +1275,12 @@ async function addSourceInline(){
 function previewLogo(event){
   const file=event.target.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=e=>{pendingLogo=e.target.result;document.getElementById('logo-prev').innerHTML=`<img src="${pendingLogo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`};
+  reader.onload=function(e){
+    pendingLogo=e.target.result;
+    const prev=document.getElementById('logo-prev');
+    prev.innerHTML=`<img src="${pendingLogo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
+  };
+  reader.onerror=function(){showToast('画像の読み込みに失敗しました');};
   reader.readAsDataURL(file);
 }
 
@@ -1210,16 +1295,17 @@ async function saveSub(){
   if(freq==='once'){onceDate=document.getElementById('f-once-date').value;if(!onceDate){showToast('支払日を入力してください');return;}}
   const paidToggle=document.getElementById('f-paid-toggle').classList.contains('on');
   const key=curKey();
+  const endMonth=document.getElementById('f-end-month').value||null;
   if(editingId){
     const sub=subs.find(s=>s.id===editingId);if(!sub)return;
-    Object.assign(sub,{name,amount:+amount,freq,day:day||sub.day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value});
+    Object.assign(sub,{name,amount:+amount,freq,day:day||sub.day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,end_month:endMonth});
     if(pendingLogo!==null)sub.logo=pendingLogo;
     if(!sub.paid_months)sub.paid_months={};
     sub.paid_months[key]=paidToggle;
     await upsertSub(sub);
   }else{
     const pm={};pm[key]=paidToggle;
-    const newSub={seq_id:nextSeqId(),name,amount:+amount,freq,day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,logo:pendingLogo||null,emoji:'📦',paid_months:pm,override_days:{},override_amounts:{}};
+    const newSub={seq_id:nextSeqId(),name,amount:+amount,freq,day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,logo:pendingLogo||null,emoji:'📦',paid_months:pm,override_days:{},override_amounts:{},end_month:endMonth};
     const{data,error}=await sbClient.from('subscriptions').insert(newSub).select().single();
     if(error){showToast('追加に失敗しました: '+error.message);return;}
     subs.push(data);
