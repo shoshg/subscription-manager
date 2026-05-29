@@ -368,6 +368,7 @@ select.form-input{appearance:none;cursor:pointer;}
       <button class="sb-nav-item" id="sb-list" onclick="switchPage('list')"><span class="sb-nav-icon"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg></span>月別一覧</button>
       <button class="sb-nav-item" id="sb-subs" onclick="switchPage('subs')"><span class="sb-nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>サブスク一覧</button>
       <button class="sb-nav-item" id="sb-stats" onclick="switchPage('stats')"><span class="sb-nav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>集計</button>
+      <button class="sb-nav-item" id="sb-forecast" onclick="switchPage('forecast')"><span class="sb-nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>予測</button>
       <button class="sb-nav-item" id="sb-settings" onclick="switchPage('settings')"><span class="sb-nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>設定</button>
     </nav>
     <div class="sb-footer">
@@ -414,18 +415,6 @@ select.form-input{appearance:none;cursor:pointer;}
             <span style="color:#ff5f7e">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color:#6c63ff">土</span>
           </div>
           <div class="cal-grid" id="cal-grid"></div>
-          <!-- 支払い予測 -->
-          <div class="forecast-card" style="margin-top:20px;">
-            <div class="forecast-title">📅 支払い予測（本日〜指定日の未払い）</div>
-            <div class="forecast-row">
-              <span class="forecast-label">本日〜</span>
-              <input class="forecast-date-input" type="date" id="forecast-date-cal" onchange="calcForecast('cal')">
-            </div>
-            <div class="forecast-result">
-              <div class="forecast-result-card"><div class="forecast-result-label">件数</div><div class="forecast-result-val amber" id="forecast-count-cal">—</div></div>
-              <div class="forecast-result-card"><div class="forecast-result-label">合計金額</div><div class="forecast-result-val red" id="forecast-amt-cal">—</div></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -468,18 +457,6 @@ select.form-input{appearance:none;cursor:pointer;}
               <button class="btn btn-ghost btn-sm btn-active" id="stats-tab-sub" onclick="switchStatsTab('sub')">📦 サブスク別</button>
             </div>
           </div>
-          <!-- 支払い予測 -->
-          <div class="forecast-card">
-            <div class="forecast-title">📅 支払い予測（本日〜指定日の未払い）</div>
-            <div class="forecast-row">
-              <span class="forecast-label">本日〜</span>
-              <input class="forecast-date-input" type="date" id="forecast-date-stats" onchange="calcForecast('stats')">
-            </div>
-            <div class="forecast-result">
-              <div class="forecast-result-card"><div class="forecast-result-label">件数</div><div class="forecast-result-val amber" id="forecast-count-stats">—</div></div>
-              <div class="forecast-result-card"><div class="forecast-result-label">合計金額</div><div class="forecast-result-val red" id="forecast-amt-stats">—</div></div>
-            </div>
-          </div>
           <div id="stats-source" style="display:none;">
             <div class="stats-section">
               <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -492,6 +469,25 @@ select.form-input{appearance:none;cursor:pointer;}
           <div id="stats-sub">
             <div class="stats-grid" id="stats-sub-content"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Forecast -->
+      <div class="page" id="page-forecast">
+        <div class="page-inner">
+          <div style="font-size:22px;font-weight:700;margin-bottom:24px;">支払予測</div>
+          <div class="forecast-card">
+            <div class="forecast-title">本日〜指定日までの未払い合計</div>
+            <div class="forecast-row">
+              <span class="forecast-label">本日〜</span>
+              <input class="forecast-date-input" type="date" id="forecast-date-main" onchange="calcForecast()">
+            </div>
+            <div class="forecast-result">
+              <div class="forecast-result-card"><div class="forecast-result-label">未払い件数</div><div class="forecast-result-val amber" id="forecast-count-main">—</div></div>
+              <div class="forecast-result-card"><div class="forecast-result-label">合計金額</div><div class="forecast-result-val red" id="forecast-amt-main">—</div></div>
+            </div>
+          </div>
+          <div id="forecast-detail-list"></div>
         </div>
       </div>
 
@@ -562,6 +558,10 @@ select.form-input{appearance:none;cursor:pointer;}
         <button class="nav-item" id="nav-stats" onclick="switchPage('stats')">
           <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
           <span class="nav-label">集計</span>
+        </button>
+        <button class="nav-item" id="nav-forecast" onclick="switchPage('forecast')">
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+          <span class="nav-label">予測</span>
         </button>
         <button class="nav-item" id="nav-settings" onclick="switchPage('settings')">
           <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
@@ -936,12 +936,13 @@ function switchPage(p){
   document.getElementById('page-'+p).classList.add('active');
   const navEl=document.getElementById('nav-'+p);const sbEl=document.getElementById('sb-'+p);
   if(navEl)navEl.classList.add('active');if(sbEl)sbEl.classList.add('active');
-  const titles={cal:'カレンダー',list:'月別一覧',subs:'サブスク',stats:'集計',settings:'設定'};
-  document.getElementById('page-title').textContent=titles[p];
+  const titles={cal:'カレンダー',list:'月別一覧',subs:'サブスク',stats:'集計',forecast:'支払予測',settings:'設定'};
+  document.getElementById('page-title').textContent=titles[p]||p;
   if(p==='list'){buildRangeOptions();renderList();}
   if(p==='subs')renderSubsList();
   if(p==='settings')renderSettings();
   if(p==='stats')renderStats();
+  if(p==='forecast')calcForecast();
 }
 
 // ── Calendar ──
@@ -1028,25 +1029,23 @@ function initForecast(){
   let y=now.getFullYear(),m=now.getMonth()+1;// 翌月(0ベース)
   if(m>11){m=0;y++;}
   const dateStr=`${y}-${String(m+1).padStart(2,'0')}-28`;
-  ['forecast-date-cal','forecast-date-stats'].forEach(id=>{
-    const el=document.getElementById(id);if(el)el.value=dateStr;
-  });
-  calcForecast('cal');
-  calcForecast('stats');
+  const el=document.getElementById('forecast-date-main');
+  if(el)el.value=dateStr;
 }
 
-function calcForecast(suffix){
-  const input=document.getElementById(`forecast-date-${suffix}`);
-  const countEl=document.getElementById(`forecast-count-${suffix}`);
-  const amtEl=document.getElementById(`forecast-amt-${suffix}`);
+function calcForecast(){
+  const input=document.getElementById('forecast-date-main');
+  const countEl=document.getElementById('forecast-count-main');
+  const amtEl=document.getElementById('forecast-amt-main');
+  const listEl=document.getElementById('forecast-detail-list');
   if(!input||!countEl||!amtEl)return;
   const dateStr=input.value;
-  if(!dateStr){countEl.textContent='—';amtEl.textContent='—';return;}
-  const toDate=new Date(dateStr);
-  const today=new Date();today.setHours(0,0,0,0);toDate.setHours(0,0,0,0);
-  if(toDate<today){countEl.textContent='0';amtEl.textContent='¥0';return;}
+  if(!dateStr){countEl.textContent='—';amtEl.textContent='—';if(listEl)listEl.innerHTML='';return;}
+  const toDate=new Date(dateStr);toDate.setHours(23,59,59,999);
+  const today=new Date();today.setHours(0,0,0,0);
+  if(toDate<today){countEl.textContent='0件';amtEl.textContent='¥0';if(listEl)listEl.innerHTML='';return;}
   let count=0,total=0;
-  // today〜toDateの間の全月をチェック
+  const items=[];
   const fromY=today.getFullYear(),fromM=today.getMonth();
   const toY=toDate.getFullYear(),toMon=toDate.getMonth();
   let y=fromY,m=fromM;
@@ -1058,13 +1057,44 @@ function calcForecast(suffix){
       if(!effDay)return;
       const payDate=new Date(y,m,effDay);payDate.setHours(0,0,0,0);
       if(payDate>=today&&payDate<=toDate&&!isPaid(sub,key)){
-        count++;total+=getEffectiveAmount(sub,key)||0;
+        count++;
+        const amt=getEffectiveAmount(sub,key)||0;
+        total+=amt;
+        items.push({sub,y,m,effDay,amt,key});
       }
     });
     m++;if(m>11){m=0;y++;}
   }
   countEl.textContent=`${count}件`;
   amtEl.textContent=fmt(total);
+  // 詳細リスト（日付順）
+  if(listEl){
+    items.sort((a,b)=>new Date(a.y,a.m,a.effDay)-new Date(b.y,b.m,b.effDay));
+    // 月ごとにグループ化
+    const byMonth={};
+    items.forEach(item=>{
+      const k=mkKey(item.y,item.m);
+      if(!byMonth[k])byMonth[k]=[];
+      byMonth[k].push(item);
+    });
+    let html='';
+    Object.entries(byMonth).forEach(([mk,mItems])=>{
+      const[my,mm]=mk.split('-').map(Number);
+      const mTotal=mItems.reduce((s,i)=>s+i.amt,0);
+      html+=`<div class="list-month-block"><div class="list-month-head"><h3>${my}年${mm}月</h3><span class="list-month-total">${fmt(mTotal)}</span></div>`;
+      html+=`<table class="list-table"><thead><tr><th>サービス</th><th>支払日</th><th>金額</th><th>支払元</th></tr></thead><tbody>`;
+      mItems.forEach(({sub,m,effDay,amt,key})=>{
+        html+=`<tr onclick="openDetail('${sub.id}','${key}')">
+          <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div><div class="list-item-name">${sub.name}</div></div></td>
+          <td style="color:var(--text2);">${m+1}月${effDay}日</td>
+          <td style="font-family:var(--mono);font-weight:500;">${fmt(amt)}</td>
+          <td style="color:var(--text2);">${sub.pay_source||'—'}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>`;
+    });
+    listEl.innerHTML=html||'';
+  }
 }
 
 function buildRangeOptions(){
