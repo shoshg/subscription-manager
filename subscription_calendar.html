@@ -90,11 +90,11 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 /* Bottom nav */
 .bottom-nav{background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px);flex-shrink:0;}
 .nav-items{display:flex;}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 0 16px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:72px;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 4px 12px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:72px;min-width:0;}
 .nav-item.active{color:var(--accent);}
-.nav-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;}
+.nav-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .nav-icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s;}
-.nav-label{font-size:10px;font-weight:500;letter-spacing:.2px;}
+.nav-label{font-size:11px;font-weight:500;letter-spacing:0;white-space:nowrap;}
 
 /* Buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:var(--font);font-size:14px;font-weight:500;padding:10px 18px;border-radius:12px;border:1px solid var(--border2);cursor:pointer;transition:all .15s;white-space:nowrap;}
@@ -162,6 +162,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .list-table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
 .list-table tr:last-child td{border-bottom:none;}
 .list-table tr:hover td{background:var(--surface2);cursor:pointer;}
+.list-table tr.row-paid td{opacity:.38;}
 .list-logo-cell{display:flex;align-items:center;gap:10px;}
 .list-logo{width:32px;height:32px;border-radius:9px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:15px;overflow:hidden;flex-shrink:0;border:1px solid var(--border);}
 .list-logo img{width:100%;height:100%;object-fit:cover;border-radius:8px;}
@@ -596,6 +597,11 @@ select.form-input{appearance:none;cursor:pointer;}
       </div>
       <div class="form-group"><label class="form-label">メモ</label><input class="form-input" id="f-memo" placeholder="ファミリープランなど"></div>
       <div class="form-group">
+        <label class="form-label">開始月（任意）</label>
+        <input class="form-input" id="f-start-month" type="month">
+        <div style="font-size:11px;color:var(--text3);margin-top:5px;">設定するとその月より前のカレンダーに表示されなくなります</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">終了月（解約月・任意）</label>
         <input class="form-input" id="f-end-month" type="month" placeholder="例：2025-12">
         <div style="font-size:11px;color:var(--text3);margin-top:5px;">設定すると翌月以降のカレンダーに表示されなくなります</div>
@@ -710,6 +716,11 @@ function isArchived(sub){
 }
 
 function isActiveForMonth(sub,y,m){
+  // 開始月が設定されていて、その前月以前なら非表示
+  if(sub.start_month){
+    const[sy,sm]=sub.start_month.split('-').map(Number);
+    if(y<sy||(y===sy&&m+1<sm))return false;
+  }
   // 終了月が設定されていて、その翌月以降なら非表示
   if(sub.end_month){
     const[ey,em]=sub.end_month.split('-').map(Number);
@@ -1002,7 +1013,7 @@ async function renderList(){
       const effDay=getEffectiveDay(sub,y,m);const amt=getEffectiveAmount(sub,key);
       const hasOverride=(sub.override_days&&sub.override_days[key]!=null)||(sub.override_amounts&&sub.override_amounts[key]!=null);
       const statusBadge=paid?`<span class="badge badge-paid">✓ 済</span>`:od?`<span class="badge badge-overdue">期限超過</span>`:`<span class="badge badge-unpaid">未払い</span>`;
-      html+=`<tr onclick="openDetail('${sub.id}','${key}')">
+      html+=`<tr class="${paid?'row-paid':''}" onclick="openDetail('${sub.id}','${key}')">
         <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div><div><div class="list-item-name">${sub.name}</div>${sub.memo?`<div class="list-item-meta">${sub.memo}</div>`:''}</div></div></td>
         <td style="color:var(--text2);">${m+1}月${effDay}日${hasOverride?' ✎':''}</td>
         <td style="font-family:var(--mono);font-weight:500;${od&&!paid?'color:var(--red)':''}">${fmt(amt)}</td>
@@ -1158,6 +1169,7 @@ function renderSubStats(){
       let y=todayY,m=todayM-i;
       while(m<0){m+=12;y--;}
       const key=mkKey(y,m);
+      if(!isActiveForMonth(sub,y,m))continue;
       const effDay=getEffectiveDay(sub,y,m);
       if(!effDay)continue;
       const payDate=new Date(y,m,effDay);
@@ -1217,6 +1229,7 @@ function openDetail(subId,key){
   const amt=getEffectiveAmount(sub,key);
   const freqLabel={monthly:'毎月','bimonthly-odd':'2ヶ月に1回（奇数月）','bimonthly-even':'2ヶ月に1回（偶数月）',irregular:'不定期',yearly:'毎年',once:'1回のみ'};
   const endMonthLabel=sub.end_month?sub.end_month.replace('-','年')+'月':'未設定';
+  const startMonthLabel=sub.start_month?sub.start_month.replace('-','年')+'月':'未設定';
   const statusBadge=paid?`<span class="badge badge-paid">✓ 支払済</span>`:od?`<span class="badge badge-overdue">期限超過</span>`:`<span class="badge badge-unpaid">未払い</span>`;
   document.getElementById('detail-body').innerHTML=`
     <div style="text-align:center;padding:8px 0 20px;">
@@ -1225,7 +1238,7 @@ function openDetail(subId,key){
       <div style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--accent);margin-top:4px;">${fmt(amt)}/月</div>
     </div>
     <div style="border-top:1px solid var(--border);">
-      ${[['支払ID',sub.seq_id],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',sub.pay_source||'未設定'],['支払方法',sub.method||'未設定'],['終了月',endMonthLabel],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
+      ${[['支払ID',sub.seq_id],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',sub.pay_source||'未設定'],['支払方法',sub.method||'未設定'],['開始月',startMonthLabel],['終了月',endMonthLabel],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;padding-bottom:4px;">
       <button class="btn ${paid?'btn-ghost':'btn-primary'}" style="width:100%;justify-content:center;" onclick="togglePaid('${subId}','${key}')">${paid?'未払いに戻す':'支払済にする'}</button>
@@ -1312,7 +1325,7 @@ function onDaySelectChange(){}
 function openAddSheet(){
   editingId=null;pendingLogo=null;selectedMethod='';selectedSource='';
   document.getElementById('edit-title').textContent='サブスクを追加';
-  ['f-name','f-amount','f-memo','f-yearly-month','f-yearly-day','f-once-date','f-end-month'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['f-name','f-amount','f-memo','f-yearly-month','f-yearly-day','f-once-date','f-end-month','f-start-month'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-day-select').value='';
   document.getElementById('f-biday-select').value='';
   document.getElementById('f-freq').value='monthly';onFreqChange();
@@ -1335,6 +1348,7 @@ function openEditSheet(subId){
   if(freq==='bimonthly-odd'||freq==='bimonthly-even'){buildDayOptions('f-biday-select', sub.day??'');}
   if(freq==='yearly'){document.getElementById('f-yearly-month').value=sub.yearly_month||'';document.getElementById('f-yearly-day').value=sub.yearly_day||'';}
   if(freq==='once')document.getElementById('f-once-date').value=sub.once_date||'';
+  document.getElementById('f-start-month').value=sub.start_month||'';
   document.getElementById('f-end-month').value=sub.end_month||'';
   document.getElementById('logo-prev').innerHTML=sub.logo?`<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`:sub.emoji||'📦';
   document.getElementById('f-paid-toggle').className='toggle'+(isPaid(sub)?' on':'');
@@ -1402,16 +1416,17 @@ async function saveSub(){
   const paidToggle=document.getElementById('f-paid-toggle').classList.contains('on');
   const key=curKey();
   const endMonth=document.getElementById('f-end-month').value||null;
+  const startMonth=document.getElementById('f-start-month').value||null;
   if(editingId){
     const sub=subs.find(s=>s.id===editingId);if(!sub)return;
-    Object.assign(sub,{name,amount:+amount,freq,day:day||sub.day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,end_month:endMonth});
+    Object.assign(sub,{name,amount:+amount,freq,day:day||sub.day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,end_month:endMonth,start_month:startMonth});
     if(pendingLogo!==null)sub.logo=pendingLogo;
     if(!sub.paid_months)sub.paid_months={};
     sub.paid_months[key]=paidToggle;
     await upsertSub(sub);
   }else{
     const pm={};pm[key]=paidToggle;
-    const newSub={seq_id:nextSeqId(),name,amount:+amount,freq,day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,logo:pendingLogo||null,emoji:'📦',paid_months:pm,override_days:{},override_amounts:{},end_month:endMonth};
+    const newSub={seq_id:nextSeqId(),name,amount:+amount,freq,day,yearly_month:yearlyMonth,yearly_day:yearlyDay,once_date:onceDate,method:selectedMethod,pay_source:selectedSource,memo:document.getElementById('f-memo').value,logo:pendingLogo||null,emoji:'📦',paid_months:pm,override_days:{},override_amounts:{},end_month:endMonth,start_month:startMonth};
     const{data,error}=await sbClient.from('subscriptions').insert(newSub).select().single();
     if(error){showToast('追加に失敗しました: '+error.message);return;}
     subs.push(data);
