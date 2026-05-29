@@ -942,7 +942,7 @@ function switchPage(p){
   if(p==='subs')renderSubsList();
   if(p==='settings')renderSettings();
   if(p==='stats')renderStats();
-  if(p==='forecast')calcForecast();
+  if(p==='forecast')initForecast();
 }
 
 // ── Calendar ──
@@ -1025,12 +1025,14 @@ function goToday(){const t=new Date();currentYear=t.getFullYear();currentMonth=t
 
 // ── List ──
 function initForecast(){
+  // デフォルト：来月28日
   const now=new Date();
   let y=now.getFullYear(),m=now.getMonth()+1;// 翌月(0ベース)
   if(m>11){m=0;y++;}
   const dateStr=`${y}-${String(m+1).padStart(2,'0')}-28`;
   const el=document.getElementById('forecast-date-main');
-  if(el)el.value=dateStr;
+  if(el&&!el.value)el.value=dateStr;// 既に値があれば上書きしない
+  calcForecast();
 }
 
 function calcForecast(){
@@ -1043,10 +1045,11 @@ function calcForecast(){
   if(!dateStr){countEl.textContent='—';amtEl.textContent='—';if(listEl)listEl.innerHTML='';return;}
   const toDate=new Date(dateStr);toDate.setHours(23,59,59,999);
   const today=new Date();today.setHours(0,0,0,0);
-  if(toDate<today){countEl.textContent='0件';amtEl.textContent='¥0';if(listEl)listEl.innerHTML='';return;}
   let count=0,total=0;
   const items=[];
-  const fromY=today.getFullYear(),fromM=today.getMonth();
+  // 過去24ヶ月〜toDateの月まで全てチェック（過去の未払いも含む）
+  const startDate=new Date(today.getFullYear(),today.getMonth()-24,1);
+  const fromY=startDate.getFullYear(),fromM=startDate.getMonth();
   const toY=toDate.getFullYear(),toMon=toDate.getMonth();
   let y=fromY,m=fromM;
   while(y<toY||(y===toY&&m<=toMon)){
@@ -1056,11 +1059,12 @@ function calcForecast(){
       const effDay=getEffectiveDay(sub,y,m);
       if(!effDay)return;
       const payDate=new Date(y,m,effDay);payDate.setHours(0,0,0,0);
-      if(payDate>=today&&payDate<=toDate&&!isPaid(sub,key)){
+      // 指定日以前 かつ 未払い
+      if(payDate<=toDate&&!isPaid(sub,key)){
         count++;
         const amt=getEffectiveAmount(sub,key)||0;
         total+=amt;
-        items.push({sub,y,m,effDay,amt,key});
+        items.push({sub,y,m,effDay,amt,key,isPast:payDate<today});
       }
     });
     m++;if(m>11){m=0;y++;}
@@ -1070,7 +1074,6 @@ function calcForecast(){
   // 詳細リスト（日付順）
   if(listEl){
     items.sort((a,b)=>new Date(a.y,a.m,a.effDay)-new Date(b.y,b.m,b.effDay));
-    // 月ごとにグループ化
     const byMonth={};
     items.forEach(item=>{
       const k=mkKey(item.y,item.m);
@@ -1081,7 +1084,12 @@ function calcForecast(){
     Object.entries(byMonth).forEach(([mk,mItems])=>{
       const[my,mm]=mk.split('-').map(Number);
       const mTotal=mItems.reduce((s,i)=>s+i.amt,0);
-      html+=`<div class="list-month-block"><div class="list-month-head"><h3>${my}年${mm}月</h3><span class="list-month-total">${fmt(mTotal)}</span></div>`;
+      const isPastMonth=new Date(my,mm-1,1)<new Date(today.getFullYear(),today.getMonth(),1);
+      html+=`<div class="list-month-block">
+        <div class="list-month-head">
+          <h3>${my}年${mm}月${isPastMonth?'<span style="font-size:11px;color:var(--red);margin-left:8px;font-weight:500;">未払い</span>':''}</h3>
+          <span class="list-month-total" style="${isPastMonth?'color:var(--red)':''}">${fmt(mTotal)}</span>
+        </div>`;
       html+=`<table class="list-table"><thead><tr><th>サービス</th><th>支払日</th><th>金額</th><th>支払元</th></tr></thead><tbody>`;
       mItems.forEach(({sub,m,effDay,amt,key})=>{
         html+=`<tr onclick="openDetail('${sub.id}','${key}')">
@@ -1093,7 +1101,7 @@ function calcForecast(){
       });
       html+=`</tbody></table></div>`;
     });
-    listEl.innerHTML=html||'';
+    listEl.innerHTML=html||'<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">未払いはありません</div></div>';
   }
 }
 
