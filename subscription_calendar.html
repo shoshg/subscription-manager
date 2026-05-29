@@ -412,6 +412,11 @@ select.form-input{appearance:none;cursor:pointer;}
             <select class="range-select" id="range-start" onchange="renderList()"></select>
             <span>〜</span>
             <select class="range-select" id="range-end" onchange="renderList()"></select>
+            <select class="range-select" id="range-day" onchange="renderList()">
+              <option value="1">1日</option>
+              <option value="15">15日</option>
+              <option value="25">25日</option>
+            </select>
           </div>
           <div id="list-content"></div>
         </div>
@@ -984,29 +989,45 @@ function buildRangeOptions(){
   const sy=document.getElementById('range-start');const ey=document.getElementById('range-end');
   if(!sy||!ey)return;
   const now=new Date();const opts=[];
-  for(let i=-6;i<=6;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);opts.push({y:d.getFullYear(),m:d.getMonth(),key:mkKey(d.getFullYear(),d.getMonth()),label:`${d.getFullYear()}年${d.getMonth()+1}月`});}
+  for(let i=-6;i<=12;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);opts.push({y:d.getFullYear(),m:d.getMonth(),key:mkKey(d.getFullYear(),d.getMonth()),label:`${d.getFullYear()}年${d.getMonth()+1}月`});}
   sy.innerHTML=opts.map(o=>`<option value="${o.key}">${o.label}</option>`).join('');
   ey.innerHTML=opts.map(o=>`<option value="${o.key}">${o.label}</option>`).join('');
+  // デフォルト：今月〜翌々月
   const ci=opts.findIndex(o=>o.y===now.getFullYear()&&o.m===now.getMonth());
-  sy.value=opts[Math.max(0,ci-2)].key;ey.value=opts[Math.min(opts.length-1,ci+1)].key;
+  sy.value=opts[Math.max(0,ci)].key;
+  ey.value=opts[Math.min(opts.length-1,ci+2)].key;
+  // 日はデフォルト1日
+  document.getElementById('range-day').value='1';
 }
 
 async function renderList(){
   const sv=document.getElementById('range-start').value;const ev=document.getElementById('range-end').value;
+  const dayFilter=parseInt(document.getElementById('range-day').value)||1;
   if(!sv||!ev)return;
   const[sy,sm]=sv.split('-').map(Number);const[ey,em]=ev.split('-').map(Number);
+  // FROM: sy年sm月dayFilter日、TO: ey年em月dayFilter日
+  const fromDate=new Date(sy,sm-1,dayFilter);
+  const toDate=new Date(ey,em-1,dayFilter);
+  if(fromDate>toDate){document.getElementById('list-content').innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">開始月が終了月より後になっています</div></div>';return;}
+  // 対象月一覧（fromDateの月〜toDateの月）
   const months=[];let y=sy,m=sm-1;
   while(y<ey||(y===ey&&m<=em-1)){months.push({y,m});m++;if(m>11){m=0;y++;}}
   await Promise.all(months.map(({y})=>fetchHolidays(y)));
   let html='';
   months.forEach(({y,m})=>{
     const key=mkKey(y,m);
-    const monthSubs=subs.filter(s=>getEffectiveDay(s,y,m)!==null);
+    // 日付フィルタ：支払日がfromDate〜toDateの範囲内のもの
+    const monthSubs=subs.filter(s=>{
+      const effDay=getEffectiveDay(s,y,m);
+      if(effDay===null)return false;
+      const payDate=new Date(y,m,effDay);
+      return payDate>=fromDate&&payDate<=toDate;
+    });
+    if(monthSubs.length===0)return;
     const total=monthSubs.reduce((s,sub)=>s+(getEffectiveAmount(sub,key)||0),0);
     const paidCnt=monthSubs.filter(s=>isPaid(s,key)).length;
     const sorted=[...monthSubs].sort((a,b)=>(getEffectiveDay(a,y,m)||0)-(getEffectiveDay(b,y,m)||0));
     html+=`<div class="list-month-block"><div class="list-month-head"><h3>${y}年${m+1}月</h3><span class="list-month-sub">${paidCnt}/${monthSubs.length}件済</span><span class="list-month-total">${fmt(total)}</span></div>`;
-    if(sorted.length===0){html+=`<p style="color:var(--text2);font-size:14px;padding:20px 0;">該当するサブスクがありません</p></div>`;return;}
     html+=`<table class="list-table"><thead><tr><th>サービス</th><th>支払日</th><th>金額</th><th>支払元</th><th>状況</th><th></th></tr></thead><tbody>`;
     sorted.forEach(sub=>{
       const paid=isPaid(sub,key);const od=isOverdue(sub,key);
