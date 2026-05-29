@@ -89,8 +89,8 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 
 /* Bottom nav */
 .bottom-nav{background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px);flex-shrink:0;}
-.nav-items{display:flex;}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 4px 12px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:72px;min-width:0;}
+.nav-items{display:flex;width:100%;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 0 12px;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:color .15s;min-height:64px;min-width:0;}
 .nav-item.active{color:var(--accent);}
 .nav-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .nav-icon svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s;}
@@ -312,6 +312,19 @@ select.form-input{appearance:none;cursor:pointer;}
 .archive-badge{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface3);color:var(--text3);font-weight:600;border:1px solid var(--border);margin-left:auto;flex-shrink:0;}
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-thumb{background:var(--surface4);border-radius:2px;}
+/* 支払い予測 */
+.forecast-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:24px;}
+.forecast-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+.forecast-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.forecast-label{font-size:13px;color:var(--text2);}
+.forecast-date-input{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:var(--font);font-size:13px;padding:8px 12px;outline:none;flex:1;min-width:140px;}
+.forecast-date-input:focus{border-color:var(--accent);}
+.forecast-result{margin-top:14px;display:flex;gap:12px;}
+.forecast-result-card{flex:1;background:var(--surface2);border-radius:12px;padding:12px 16px;}
+.forecast-result-label{font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
+.forecast-result-val{font-family:var(--mono);font-size:20px;font-weight:700;}
+.forecast-result-val.red{color:var(--red);}
+.forecast-result-val.amber{color:var(--amber);}
 </style>
 </head>
 <body>
@@ -401,6 +414,18 @@ select.form-input{appearance:none;cursor:pointer;}
             <span style="color:#ff5f7e">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color:#6c63ff">土</span>
           </div>
           <div class="cal-grid" id="cal-grid"></div>
+          <!-- 支払い予測 -->
+          <div class="forecast-card" style="margin-top:20px;">
+            <div class="forecast-title">📅 支払い予測（本日〜指定日の未払い）</div>
+            <div class="forecast-row">
+              <span class="forecast-label">本日〜</span>
+              <input class="forecast-date-input" type="date" id="forecast-date-cal" onchange="calcForecast('cal')">
+            </div>
+            <div class="forecast-result">
+              <div class="forecast-result-card"><div class="forecast-result-label">件数</div><div class="forecast-result-val amber" id="forecast-count-cal">—</div></div>
+              <div class="forecast-result-card"><div class="forecast-result-label">合計金額</div><div class="forecast-result-val red" id="forecast-amt-cal">—</div></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -441,6 +466,18 @@ select.form-input{appearance:none;cursor:pointer;}
             <div style="display:flex;gap:8px;">
               <button class="btn btn-ghost btn-sm" id="stats-tab-source" onclick="switchStatsTab('source')">💳 支払元別</button>
               <button class="btn btn-ghost btn-sm btn-active" id="stats-tab-sub" onclick="switchStatsTab('sub')">📦 サブスク別</button>
+            </div>
+          </div>
+          <!-- 支払い予測 -->
+          <div class="forecast-card">
+            <div class="forecast-title">📅 支払い予測（本日〜指定日の未払い）</div>
+            <div class="forecast-row">
+              <span class="forecast-label">本日〜</span>
+              <input class="forecast-date-input" type="date" id="forecast-date-stats" onchange="calcForecast('stats')">
+            </div>
+            <div class="forecast-result">
+              <div class="forecast-result-card"><div class="forecast-result-label">件数</div><div class="forecast-result-val amber" id="forecast-count-stats">—</div></div>
+              <div class="forecast-result-card"><div class="forecast-result-label">合計金額</div><div class="forecast-result-val red" id="forecast-amt-stats">—</div></div>
             </div>
           </div>
           <div id="stats-source" style="display:none;">
@@ -852,6 +889,7 @@ async function startApp(){
   document.getElementById('app').classList.add('ready');
   buildRangeOptions();
   render();
+  initForecast();
 }
 
 function logout(){localStorage.removeItem('sb_url');localStorage.removeItem('sb_key');location.reload();}
@@ -985,7 +1023,58 @@ function changeMonth(dir){
 function goToday(){const t=new Date();currentYear=t.getFullYear();currentMonth=t.getMonth();render();}
 
 // ── List ──
-function buildRangeOptions(){
+function initForecast(){
+  // デフォルト：翌月28日（土日祝なら直前平日）
+  const now=new Date();
+  let y=now.getFullYear(),m=now.getMonth()+1; // 翌月
+  if(m>11){m=0;y++;}
+  // 28日から遡って直前平日を探す
+  let d=28;
+  while(d>=1){
+    const dt=new Date(y,m,d);
+    const dow=dt.getDay();
+    if(dow!==0&&dow!==6&&!isHoliday(y,m,d))break;
+    d--;
+  }
+  const dateStr=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  ['forecast-date-cal','forecast-date-stats'].forEach(id=>{
+    const el=document.getElementById(id);if(el){el.value=dateStr;}
+  });
+  calcForecast('cal');
+  calcForecast('stats');
+}
+
+function calcForecast(suffix){
+  const input=document.getElementById(`forecast-date-${suffix}`);
+  const countEl=document.getElementById(`forecast-count-${suffix}`);
+  const amtEl=document.getElementById(`forecast-amt-${suffix}`);
+  if(!input||!countEl||!amtEl)return;
+  const dateStr=input.value;
+  if(!dateStr){countEl.textContent='—';amtEl.textContent='—';return;}
+  const toDate=new Date(dateStr);
+  const today=new Date();today.setHours(0,0,0,0);toDate.setHours(0,0,0,0);
+  if(toDate<today){countEl.textContent='0';amtEl.textContent='¥0';return;}
+  let count=0,total=0;
+  // today〜toDateの間の全月をチェック
+  const fromY=today.getFullYear(),fromM=today.getMonth();
+  const toY=toDate.getFullYear(),toMon=toDate.getMonth();
+  let y=fromY,m=fromM;
+  while(y<toY||(y===toY&&m<=toMon)){
+    const key=mkKey(y,m);
+    subs.forEach(sub=>{
+      if(!isActiveForMonth(sub,y,m))return;
+      const effDay=getEffectiveDay(sub,y,m);
+      if(!effDay)return;
+      const payDate=new Date(y,m,effDay);payDate.setHours(0,0,0,0);
+      if(payDate>=today&&payDate<=toDate&&!isPaid(sub,key)){
+        count++;total+=getEffectiveAmount(sub,key)||0;
+      }
+    });
+    m++;if(m>11){m=0;y++;}
+  }
+  countEl.textContent=`${count}件`;
+  amtEl.textContent=fmt(total);
+}
   const sy=document.getElementById('range-start');const ey=document.getElementById('range-end');
   if(!sy||!ey)return;
   const now=new Date();const opts=[];
