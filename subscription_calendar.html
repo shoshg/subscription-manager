@@ -888,7 +888,7 @@ async function startApp(){
   hideLoading();
   document.getElementById('app').classList.add('ready');
   buildRangeOptions();
-  render();
+  await render();
   initForecast();
 }
 
@@ -1106,6 +1106,7 @@ function calcForecast(){
 }
 
 function buildRangeOptions(){
+  const sy=document.getElementById('range-start');const ey=document.getElementById('range-end');
   if(!sy||!ey)return;
   const now=new Date();const opts=[];
   for(let i=-6;i<=12;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);opts.push({y:d.getFullYear(),m:d.getMonth(),key:mkKey(d.getFullYear(),d.getMonth()),label:`${d.getFullYear()}年${d.getMonth()+1}月`});}
@@ -1618,8 +1619,8 @@ async function importCSV(event){
 function closeSheet(id){document.getElementById(id).classList.remove('open');}
 function overlayClick(e,id){if(e.target===document.getElementById(id))closeSheet(id);}
 
-function render(){
-  renderCalendar();
+async function render(){
+  await renderCalendar();
   if(currentPage==='list')renderList();
   if(currentPage==='subs')renderSubsList();
   if(currentPage==='stats')renderStats();
