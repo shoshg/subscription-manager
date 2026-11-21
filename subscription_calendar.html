@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="icon.png">
 
 <title>サブスク管理</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -26,7 +26,7 @@
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden;}
 
 /* Setup */
-#setup-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px;}
+#setup-screen,#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px;}
 .setup-card{background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:40px 36px;width:100%;max-width:480px;}
 .setup-logo{font-size:48px;text-align:center;margin-bottom:20px;}
 .setup-title{font-size:26px;font-weight:700;text-align:center;margin-bottom:8px;letter-spacing:-.5px;}
@@ -349,6 +349,25 @@ select.form-input{appearance:none;cursor:pointer;}
   </div>
 </div>
 
+<!-- Login -->
+<div id="login-screen" style="display:none;">
+  <div class="setup-card">
+    <div class="setup-logo">🔒</div>
+    <div class="setup-title">ログイン</div>
+    <div class="setup-sub">登録したメールアドレスとパスワードを入力してください。</div>
+    <div class="setup-group">
+      <label class="setup-label">メールアドレス</label>
+      <input class="setup-input" id="login-email" type="email" autocomplete="username" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="setup-group">
+      <label class="setup-label">パスワード</label>
+      <input class="setup-input" id="login-pass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="setup-btn" id="login-btn" onclick="doLogin()">ログイン</button>
+    <div class="setup-error" id="login-error"></div>
+  </div>
+</div>
+
 <!-- Loading -->
 <div class="loading-overlay" id="loading" style="display:none;">
   <div class="loading-spinner"></div>
@@ -379,7 +398,7 @@ select.form-input{appearance:none;cursor:pointer;}
         <div class="sb-progress"><div class="sb-progress-fill" id="sb-progress" style="width:0%"></div></div>
         <div class="sb-progress-text" id="sb-progress-text">0/0件 支払済</div>
       </div>
-      <button class="sb-logout-btn" onclick="logout()">設定をリセット</button>
+      <button class="sb-logout-btn" onclick="logout()">ログアウト</button>
     </div>
   </aside>
 
@@ -532,6 +551,10 @@ select.form-input{appearance:none;cursor:pointer;}
             <div class="settings-section-title">接続情報</div>
             <div class="settings-card">
               <div class="settings-item" onclick="logout()">
+                <div><div class="settings-item-label">🔒 ログアウト</div><div class="settings-item-sub">この端末のログイン状態を解除する</div></div>
+                <span class="settings-arrow">›</span>
+              </div>
+              <div class="settings-item" onclick="resetConnection()">
                 <div><div class="settings-item-label">🔌 Supabase設定をリセット</div><div class="settings-item-sub">別のプロジェクトに接続し直す</div></div>
                 <span class="settings-arrow">›</span>
               </div>
@@ -715,6 +738,9 @@ let currentStatsTab='sub';
 let currentSourceTab='month';
 
 const fmt=n=>'¥'+Number(n).toLocaleString();
+// ── XSS対策：HTMLエスケープ・ロゴURL検証 ──
+const esc=v=>String(v==null?'':v).replace(/[&<>"'`]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
+const safeLogo=v=>(typeof v==='string'&&/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+\/=]+$/.test(v))?v:'';
 const mkKey=(y,m)=>`${y}-${String(m+1).padStart(2,'0')}`;
 const curKey=()=>mkKey(currentYear,currentMonth);
 
@@ -798,7 +824,7 @@ function getEffectiveDay(sub,y,m){
   if(sub.override_days&&sub.override_days[key]!=null){
     const ov=sub.override_days[key];
     if(ov===0)return getLastWorkday(y,m); // 0=月末日
-    return ov;
+    const ovn=Number(ov);return Number.isFinite(ovn)?ovn:null;
   }
   if(sub.freq==='yearly'){
     if(sub.yearly_month===(m+1)){
@@ -874,7 +900,7 @@ async function initSupabase(){
     if(error)throw error;
     localStorage.setItem('sb_url',url);localStorage.setItem('sb_key',key);
     document.getElementById('setup-screen').style.display='none';
-    await startApp();
+    await afterConnect();
   }catch(e){errEl.textContent='接続に失敗しました。URLとAPIキーを確認してください。('+( e.message||e)+')';errEl.style.display='block';}
 }
 
@@ -892,7 +918,39 @@ async function startApp(){
   initForecast();
 }
 
-function logout(){localStorage.removeItem('sb_url');localStorage.removeItem('sb_key');location.reload();}
+// ── Auth ──
+async function afterConnect(){
+  sbClient.auth.onAuthStateChange(ev=>{if(ev==='SIGNED_OUT')showLogin();});
+  const{data}=await sbClient.auth.getSession();
+  if(data&&data.session){await startApp();}else{showLogin();}
+}
+function showLogin(){
+  document.getElementById('login-screen').style.display='flex';
+  const em=document.getElementById('login-email');if(em&&!em.value)em.focus();
+}
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const errEl=document.getElementById('login-error');const btn=document.getElementById('login-btn');
+  errEl.style.display='none';
+  if(!email||!pass){errEl.textContent='メールアドレスとパスワードを入力してください';errEl.style.display='block';return;}
+  btn.disabled=true;btn.textContent='ログイン中...';
+  const{error}=await sbClient.auth.signInWithPassword({email,password:pass});
+  btn.disabled=false;btn.textContent='ログイン';
+  if(error){errEl.textContent='ログインに失敗しました。メールアドレスとパスワードを確認してください。';errEl.style.display='block';return;}
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-screen').style.display='none';
+  await startApp();
+}
+async function logout(){
+  try{await sbClient.auth.signOut();}catch(e){}
+  location.reload();
+}
+async function resetConnection(){
+  if(!confirm('Supabaseの接続情報をこの端末から削除します。よろしいですか？'))return;
+  try{await sbClient.auth.signOut();}catch(e){}
+  localStorage.removeItem('sb_url');localStorage.removeItem('sb_key');location.reload();
+}
 
 // ── Data ──
 async function loadSubs(){
@@ -994,16 +1052,16 @@ async function renderCalendar(){
     const c=document.createElement('div');
     c.className='cal-cell'+(isToday?' today':'')+(hol?' holiday-cell':'');
     let html=`<div class="cal-day-n" style="${hol?'color:var(--red)':''}">${d}</div>`;
-    if(hol)html+=`<div class="holiday-name">${hol}</div>`;
+    if(hol)html+=`<div class="holiday-name">${esc(hol)}</div>`;
     html+=`<div class="cal-chips">`;
     const items=byDay[d]||[];
     items.slice(0,3).forEach(sub=>{
       const paid=isPaid(sub,key);const od=isOverdue(sub,key);
       const amt=getEffectiveAmount(sub,key);
-      const logoHtml=sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦';
+      const logoHtml=sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦');
       html+=`<div class="cal-chip ${paid?'paid':od?'overdue':''}" onclick="openDetail('${sub.id}','${key}')">
         ${calViewMode==='logo'
-          ?`<div class="chip-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div>`
+          ?`<div class="chip-logo">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦')}</div>`
           :`<div class="chip-amt ${od&&!paid?'overdue':''}" style="flex:1;">${fmt(amt)}</div>`}
         ${paid?'<div class="chip-check">✓</div>':''}
       </div>`;
@@ -1093,10 +1151,10 @@ function calcForecast(){
       html+=`<table class="list-table"><thead><tr><th>サービス</th><th>支払日</th><th>金額</th><th>支払元</th></tr></thead><tbody>`;
       mItems.forEach(({sub,m,effDay,amt,key})=>{
         html+=`<tr onclick="openDetail('${sub.id}','${key}')">
-          <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div><div class="list-item-name">${sub.name}</div></div></td>
+          <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦')}</div><div class="list-item-name">${esc(sub.name)}</div></div></td>
           <td style="color:var(--text2);">${m+1}月${effDay}日</td>
           <td style="font-family:var(--mono);font-weight:500;">${fmt(amt)}</td>
-          <td style="color:var(--text2);">${sub.pay_source||'—'}</td>
+          <td style="color:var(--text2);">${esc(sub.pay_source||'—')}</td>
         </tr>`;
       });
       html+=`</tbody></table></div>`;
@@ -1155,10 +1213,10 @@ async function renderList(){
       const hasOverride=(sub.override_days&&sub.override_days[key]!=null)||(sub.override_amounts&&sub.override_amounts[key]!=null);
       const statusBadge=paid?`<span class="badge badge-paid">✓ 済</span>`:od?`<span class="badge badge-overdue">期限超過</span>`:`<span class="badge badge-unpaid">未払い</span>`;
       html+=`<tr class="${paid?'row-paid':''}" onclick="openDetail('${sub.id}','${key}')">
-        <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div><div><div class="list-item-name">${sub.name}</div>${sub.memo?`<div class="list-item-meta">${sub.memo}</div>`:''}</div></div></td>
+        <td><div class="list-logo-cell"><div class="list-logo">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦')}</div><div><div class="list-item-name">${esc(sub.name)}</div>${sub.memo?`<div class="list-item-meta">${esc(sub.memo)}</div>`:''}</div></div></td>
         <td style="color:var(--text2);">${m+1}月${effDay}日${hasOverride?' ✎':''}</td>
         <td style="font-family:var(--mono);font-weight:500;${od&&!paid?'color:var(--red)':''}">${fmt(amt)}</td>
-        <td style="color:var(--text2);">${sub.pay_source||'—'}</td>
+        <td style="color:var(--text2);">${esc(sub.pay_source||'—')}</td>
         <td>${statusBadge}</td>
         <td onclick="event.stopPropagation()"><button class="paid-toggle-btn ${paid?'is-paid':''}" onclick="quickTogglePaid('${sub.id}','${key}',this)">${paid?'済✓':'済にする'}</button></td>
       </tr>`;
@@ -1187,10 +1245,10 @@ function renderSubsList(){
   const archivedSubs=subs.filter(s=>isSubArchived(s));
   const cardHtml=sub=>`
     <div class="sub-card${isSubArchived(sub)?' archived':''}" onclick="openDetail('${sub.id}','${curKey()}')">
-      <div class="sub-card-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div>
+      <div class="sub-card-logo">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦')}</div>
       <div class="sub-card-info">
-        <div class="sub-card-name">${sub.name}</div>
-        <div class="sub-card-meta">ID:${sub.seq_id} · ${freqLabel[sub.freq||'monthly']} · ${sub.pay_source||sub.method||'未設定'}</div>
+        <div class="sub-card-name">${esc(sub.name)}</div>
+        <div class="sub-card-meta">ID:${esc(sub.seq_id)} · ${freqLabel[sub.freq||'monthly']} · ${esc(sub.pay_source||sub.method||'未設定')}</div>
       </div>
       <div class="sub-card-amt">${fmt(sub.amount)}</div>
       ${isSubArchived(sub)?`<div class="archive-badge">解約済</div>`:''}
@@ -1255,7 +1313,7 @@ function renderSourceStats(){
     html+=`<div class="settings-card"><table class="source-stats-table"><thead><tr><th>支払元</th><th>件数</th><th>合計</th><th>支払済</th></tr></thead><tbody>`;
     if(Object.keys(sourceMap).length===0){html+=`<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:20px;">データがありません</td></tr>`;}
     Object.entries(sourceMap).sort((a,b)=>b[1].total-a[1].total).forEach(([src,d])=>{
-      html+=`<tr><td style="font-weight:500;">${src}</td><td style="color:var(--text2);">${d.count}件</td><td style="font-family:var(--mono);font-weight:500;">${fmt(d.total)}</td><td style="font-family:var(--mono);color:var(--green);">${fmt(d.paid)}</td></tr>`;
+      html+=`<tr><td style="font-weight:500;">${esc(src)}</td><td style="color:var(--text2);">${d.count}件</td><td style="font-family:var(--mono);font-weight:500;">${fmt(d.total)}</td><td style="font-family:var(--mono);color:var(--green);">${fmt(d.paid)}</td></tr>`;
     });
     html+=`</tbody></table></div>`;
     document.getElementById('stats-source-content').innerHTML=html;
@@ -1276,7 +1334,7 @@ function renderSourceStats(){
     Object.entries(dayMap).forEach(([day,srcMap])=>{
       html+=`<div class="settings-card" style="margin-bottom:12px;"><div style="padding:12px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--border);">${day}</div>`;
       Object.entries(srcMap).forEach(([src,amt])=>{
-        html+=`<div style="display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);">${src}</span><span style="font-family:var(--mono);font-weight:500;">${fmt(amt)}</span></div>`;
+        html+=`<div style="display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);">${esc(src)}</span><span style="font-family:var(--mono);font-weight:500;">${fmt(amt)}</span></div>`;
       });
       html+=`</div>`;
     });
@@ -1323,14 +1381,14 @@ function renderSubStats(){
 
     html+=`<div class="stats-card">
       <div class="stats-card-header">
-        <div class="stats-card-logo">${sub.logo?`<img src="${sub.logo}" alt="">`:sub.emoji||'📦'}</div>
-        <div><div class="stats-card-name">${sub.name}</div><div class="stats-card-freq">${{monthly:'毎月','bimonthly-odd':'2ヶ月に1回（奇数月）','bimonthly-even':'2ヶ月に1回（偶数月）',irregular:'不定期',yearly:'毎年',once:'1回のみ'}[freq]||freq}</div></div>
+        <div class="stats-card-logo">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="">`:esc(sub.emoji||'📦')}</div>
+        <div><div class="stats-card-name">${esc(sub.name)}</div><div class="stats-card-freq">${{monthly:'毎月','bimonthly-odd':'2ヶ月に1回（奇数月）','bimonthly-even':'2ヶ月に1回（偶数月）',irregular:'不定期',yearly:'毎年',once:'1回のみ'}[freq]||esc(freq)}</div></div>
       </div>
       <div class="stats-row"><span class="k">月額</span><span class="v">${freq==='monthly'?fmt(sub.amount):'—'}</span></div>
       <div class="stats-row"><span class="k">年間（概算）</span><span class="v">${yearlyAmt>0?fmt(yearlyAmt):'—'}</span></div>
       <div class="stats-row"><span class="k">支払済合計</span><span class="v" style="color:var(--green);">${fmt(paidTotal)}</span></div>
       ${unpaidCount>0?`<div class="stats-row"><span class="k" style="color:var(--red);">未払い</span><span class="v" style="color:var(--red);">${unpaidCount}件 / ${fmt(unpaidTotal)}</span></div>`:''}
-      <div class="stats-row"><span class="k">支払元</span><span class="v">${sub.pay_source||'—'}</span></div>
+      <div class="stats-row"><span class="k">支払元</span><span class="v">${esc(sub.pay_source||'—')}</span></div>
     </div>`;
   });
   document.getElementById('stats-sub-content').innerHTML=html;
@@ -1340,10 +1398,10 @@ function renderSubStats(){
 function renderSettings(){
   // Sources
   const se=document.getElementById('source-tags');
-  se.innerHTML=paySources.map((s,i)=>`<div class="method-tag">${s}<button class="method-tag-del" onclick="deletePaySource(${i})">×</button></div>`).join('');
+  se.innerHTML=paySources.map((s,i)=>`<div class="method-tag">${esc(s)}<button class="method-tag-del" onclick="deletePaySource(${i})">×</button></div>`).join('');
   // Methods
   const me=document.getElementById('method-tags');
-  me.innerHTML=methods.map((m,i)=>`<div class="method-tag">${m}<button class="method-tag-del" onclick="deleteMethod(${i})">×</button></div>`).join('');
+  me.innerHTML=methods.map((m,i)=>`<div class="method-tag">${esc(m)}<button class="method-tag-del" onclick="deleteMethod(${i})">×</button></div>`).join('');
 }
 
 async function addPaySource(){
@@ -1369,17 +1427,17 @@ function openDetail(subId,key){
   const paid=isPaid(sub,key);const od=isOverdue(sub,key);
   const amt=getEffectiveAmount(sub,key);
   const freqLabel={monthly:'毎月','bimonthly-odd':'2ヶ月に1回（奇数月）','bimonthly-even':'2ヶ月に1回（偶数月）',irregular:'不定期',yearly:'毎年',once:'1回のみ'};
-  const endMonthLabel=sub.end_month?sub.end_month.replace('-','年')+'月':'未設定';
-  const startMonthLabel=sub.start_month?sub.start_month.replace('-','年')+'月':'未設定';
+  const endMonthLabel=sub.end_month?esc(sub.end_month.replace('-','年')+'月'):'未設定';
+  const startMonthLabel=sub.start_month?esc(sub.start_month.replace('-','年')+'月'):'未設定';
   const statusBadge=paid?`<span class="badge badge-paid">✓ 支払済</span>`:od?`<span class="badge badge-overdue">期限超過</span>`:`<span class="badge badge-unpaid">未払い</span>`;
   document.getElementById('detail-body').innerHTML=`
     <div style="text-align:center;padding:8px 0 20px;">
-      <div style="width:72px;height:72px;border-radius:18px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;border:1px solid var(--border2);margin:0 auto 12px;">${sub.logo?`<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;">`:sub.emoji||'📦'}</div>
-      <div style="font-size:22px;font-weight:700;">${sub.name}</div>
+      <div style="width:72px;height:72px;border-radius:18px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;border:1px solid var(--border2);margin:0 auto 12px;">${sub.logo?`<img src="${safeLogo(sub.logo)}" alt="" style="width:100%;height:100%;object-fit:cover;">`:esc(sub.emoji||'📦')}</div>
+      <div style="font-size:22px;font-weight:700;">${esc(sub.name)}</div>
       <div style="font-family:var(--mono);font-size:28px;font-weight:500;color:var(--accent);margin-top:4px;">${fmt(amt)}/月</div>
     </div>
     <div style="border-top:1px solid var(--border);">
-      ${[['支払ID',sub.seq_id],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',sub.pay_source||'未設定'],['支払方法',sub.method||'未設定'],['開始月',startMonthLabel],['終了月',endMonthLabel],['メモ',sub.memo||'—'],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
+      ${[['支払ID',esc(sub.seq_id)],['頻度',freqLabel[sub.freq||'monthly']],['基本金額',fmt(sub.amount)],['今月の支払日',effDay?`${km}月${effDay}日${hasOverride?' ✎上書き中':''}`:'-'],['支払元',esc(sub.pay_source||'未設定')],['支払方法',esc(sub.method||'未設定')],['開始月',startMonthLabel],['終了月',endMonthLabel],['メモ',esc(sub.memo||'—')],['今月の状況',statusBadge]].map(([k,v])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="color:var(--text2);font-weight:500;">${k}</span><span style="font-weight:500;">${v}</span></div>`).join('')}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;padding-bottom:4px;">
       <button class="btn ${paid?'btn-ghost':'btn-primary'}" style="width:100%;justify-content:center;" onclick="togglePaid('${subId}','${key}')">${paid?'未払いに戻す':'支払済にする'}</button>
@@ -1412,7 +1470,7 @@ function openOverrideSheet(subId,key){
   const hasDay=sub.override_days&&sub.override_days[key]!=null;
   const hasAmt=sub.override_amounts&&sub.override_amounts[key]!=null;
   const hasOverride=hasDay||hasAmt;
-  document.getElementById('override-desc').textContent=`${sub.name} の ${ky}年${km}月`;
+  document.getElementById('override-desc').textContent=`${esc(sub.name)} の ${ky}年${km}月`;
   const info=document.getElementById('override-info');
   if(hasOverride){info.textContent=`現在上書き中：${hasDay?`支払日 ${km}月${sub.override_days[key]}日`:''}${hasDay&&hasAmt?' / ':''}${hasAmt?`金額 ${fmt(sub.override_amounts[key])}`:''}`;info.classList.add('visible');}
   else{info.classList.remove('visible');}
@@ -1491,7 +1549,7 @@ function openEditSheet(subId){
   if(freq==='once')document.getElementById('f-once-date').value=sub.once_date||'';
   document.getElementById('f-start-month').value=sub.start_month||'';
   document.getElementById('f-end-month').value=sub.end_month||'';
-  document.getElementById('logo-prev').innerHTML=sub.logo?`<img src="${sub.logo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`:sub.emoji||'📦';
+  document.getElementById('logo-prev').innerHTML=sub.logo?`<img src="${safeLogo(sub.logo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`:esc(sub.emoji||'📦');
   document.getElementById('f-paid-toggle').className='toggle'+(isPaid(sub)?' on':'');
   renderMethodList();renderSourceList();
   document.getElementById('edit-overlay').classList.add('open');
@@ -1499,13 +1557,13 @@ function openEditSheet(subId){
 
 function renderMethodList(){
   document.getElementById('edit-method-list').innerHTML=
-    methods.map(m=>`<div class="method-option ${selectedMethod===m?'selected':''}" onclick="selectMethod('${m}')">${m}${selectedMethod===m?'<span style="color:var(--accent)">✓</span>':''}</div>`).join('')+
+    methods.map(m=>`<div class="method-option ${selectedMethod===m?'selected':''}" data-v="${esc(m)}" onclick="selectMethod(this.dataset.v)">${esc(m)}${selectedMethod===m?'<span style="color:var(--accent)">✓</span>':''}</div>`).join('')+
     `<div class="method-add-inline"><input class="method-add-input-inline" id="inline-method-input" placeholder="新しい支払方法を追加…"><button class="method-add-btn-inline" onclick="addMethodInline()">追加</button></div>`;
 }
 
 function renderSourceList(){
   document.getElementById('edit-source-list').innerHTML=
-    paySources.map(s=>`<div class="method-option ${selectedSource===s?'selected':''}" onclick="selectSource('${s}')">${s}${selectedSource===s?'<span style="color:var(--accent)">✓</span>':''}</div>`).join('')+
+    paySources.map(s=>`<div class="method-option ${selectedSource===s?'selected':''}" data-v="${esc(s)}" onclick="selectSource(this.dataset.v)">${esc(s)}${selectedSource===s?'<span style="color:var(--accent)">✓</span>':''}</div>`).join('')+
     `<div class="method-add-inline"><input class="method-add-input-inline" id="inline-source-input" placeholder="新しい支払元を追加…"><button class="method-add-btn-inline" onclick="addSourceInline()">追加</button></div>`;
 }
 
@@ -1529,7 +1587,7 @@ function previewLogo(event){
   reader.onload=function(e){
     pendingLogo=e.target.result;
     const prev=document.getElementById('logo-prev');
-    prev.innerHTML=`<img src="${pendingLogo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
+    prev.innerHTML=`<img src="${safeLogo(pendingLogo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">`;
   };
   reader.onerror=function(){showToast('画像の読み込みに失敗しました');};
   reader.readAsDataURL(file);
@@ -1578,7 +1636,7 @@ async function saveSub(){
 // ── Delete ──
 function confirmDelete(subId){
   const sub=subs.find(s=>s.id===subId);if(!sub)return;
-  document.getElementById('confirm-msg').textContent=`「${sub.name}」を削除しますか？この操作は取り消せません。`;
+  document.getElementById('confirm-msg').textContent=`「${esc(sub.name)}」を削除しますか？この操作は取り消せません。`;
   document.getElementById('confirm-ok').onclick=async()=>{await deleteSub(subId);closeSheet('confirm-overlay');closeSheet('detail-overlay');showToast('削除しました');};
   closeSheet('detail-overlay');document.getElementById('confirm-overlay').classList.add('open');
 }
@@ -1624,6 +1682,7 @@ async function render(){
   if(currentPage==='list')renderList();
   if(currentPage==='subs')renderSubsList();
   if(currentPage==='stats')renderStats();
+  if(currentPage==='forecast')calcForecast();
 }
 
 // ── Auto-connect ──
@@ -1633,7 +1692,7 @@ window.addEventListener('load',()=>{
     document.getElementById('setup-url').value=url;document.getElementById('setup-key').value=key;
     sbClient=window.supabase.createClient(url,key);
     document.getElementById('setup-screen').style.display='none';
-    startApp();
+    afterConnect();
   }
 });
 </script>
