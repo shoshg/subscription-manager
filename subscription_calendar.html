@@ -325,6 +325,10 @@ select.form-input{appearance:none;cursor:pointer;}
 .forecast-result-val{font-family:var(--mono);font-size:20px;font-weight:700;}
 .forecast-result-val.red{color:var(--red);}
 .forecast-result-val.amber{color:var(--amber);}
+/* iOS Safariで入力欄タップ時に画面が自動拡大されるのを防ぐ（16px以上にする） */
+@supports (-webkit-touch-callout:none){
+  input,select,textarea{font-size:16px !important;}
+}
 </style>
 </head>
 <body>
@@ -926,7 +930,6 @@ async function afterConnect(){
 }
 function showLogin(){
   document.getElementById('login-screen').style.display='flex';
-  const em=document.getElementById('login-email');if(em&&!em.value)em.focus();
 }
 async function doLogin(){
   const email=document.getElementById('login-email').value.trim();
